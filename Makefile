@@ -1,4 +1,4 @@
 html:
-	pandoc zprava.md -o zprava.html -css=pandoc.css
+	pandoc zprava.md -o zprava.html
 compile:
 	cargo build --release

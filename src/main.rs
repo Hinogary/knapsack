@@ -72,18 +72,25 @@ fn main() {
             }else if opts.solution.is_some() && problem.min_cost == None{
                 panic!("Missing reference solution!")
             };
-            (solution.id, elapsed.as_secs_f64(),
+            (solution.id, elapsed,
             solution.visits.unwrap(), solution.parent_visits.unwrap())
         }).collect::<Vec<_>>();
 
+    // output file, which is easier to parse for nice graphs
     if let Some(path) = opts.save_durations {
         fs::write(path,
-                durations.into_iter()
+                durations.iter()
                 .map(|(id, elapsed, visits, p_visits)|
-                    format!("{} {} {} {}", id, elapsed, visits, p_visits)
+                    format!("{} {} {} {}", id, elapsed.as_secs_f64(), visits, p_visits)
                 ).join("\n"))
             .expect("Failed to save durations!");
     }
+
+    println!("Maximum time: {:?} Average time: {:?}",
+        durations.iter().map(|(_, elapsed, _, _)| elapsed).max().unwrap_or(&time),
+        durations.iter().map(|(_, elapsed, _, _)| *elapsed).fold(Duration::new(0,0), |acc, x| acc + x) / (durations.len() as u32)
+    );
+
     println!("Total time: {:?}", time);
 }
 
@@ -387,7 +394,7 @@ fn decision_pruning(problem: &Problem) -> Solution {
                 rec_fn(
                     problem,
                     cost + problem.p.items[index].cost,
-                    weight + problem.p.items[index].weight,
+                    new_weight,
                     index + 1, min_cost)
             }else {0};
             let best_without_item = if best_with_item == 0 {
@@ -409,7 +416,7 @@ fn decision_pruning(problem: &Problem) -> Solution {
             }
         } else {
             problem.visits += 1;
-            if weight <= problem.p.max_weight && cost >= min_cost{
+            if cost >= min_cost{
                 cost
             }else{
                 0

@@ -1,3 +1,5 @@
+<link rel="stylesheet" type="text/css" href="pandoc.css"/>
+
 Problém batohu
 ==============
 
@@ -34,22 +36,51 @@ time: 60.762µs visits: 93 p_visits: 9332
 time: 298ns visits: 0 p_visits: 1
 496 25 0
 ...
-Total time: 110.946808ms
+Maximum time: 1.420254ms Average time: 11.261µs
+Total time: 5.630666ms
 ```
 
 Naivní algoritmus
 -----------------
 
-První jsem implementoval naivní algoritmus, ten zkouší každou iteraci rekurzivním průchodem. Po cestě si nasčítává cenu a váhu přidaných itemů, nicméně až nakonci se rozhoduje, jestli překročil váhu, a jestli má maximální cenu.
+První jsem implementoval naivní algoritmus, ten zkouší každou iteraci rekurzivním průchodem. Po cestě si nasčítává cenu a váhu přidaných itemů, nicméně až nakonci se rozhoduje, jestli překročil váhu, a jestli má maximální cenu. V případě nenalezení řešení, tak platí `visits` = $2^n$ a `p_visits` = $2^n-1$.
 
 Prořezávací algoritmus
 ----------------------
 
-Funkčnost tohoto algoritmu je podobná jak naivní až na dvě optimalizace. Průběžně zkouší, jestli překročil váhu a při překročení nepokračuje. Navíc kontroluje jestli ve zbývajicích předmětech je dostatečná hodnota na překročení minimální akceptovatelné ceny (u konstruktivní verze to je aktuálně maximální nalezené cena), a když není tak se také ukončí. Vzhledem k optimalizacím `visits` u rozhodovací verze je 1 nebo 0, podle toho jestli řešení našel. U kontruktivní verze to je počet vylepšení aktuálního řešení.
+Funkčnost tohoto algoritmu je podobná jak naivní až na dvě optimalizace. Průběžně zkouší, jestli překročil váhu a při překročení nepokračuje. Navíc kontroluje jestli ve zbývajicích předmětech je dostatečná hodnota na překročení minimální akceptovatelné ceny (u konstruktivní verze to je aktuálně maximální nalezené cena), a když není tak se také ukončí.
 
 Porovnání implementací
 ----------------------
 
-Testování provádím na notebooku s procesorem `i5-8350U` a dostatkem RAM paměti. Při měření dbám akorát na to, aby notebook byl pokaždé zapojen do síťě a teda se nesnažil šetřit energii. Vzhledem k tomu, že u rozhodovací verze v prořezávacím algoritmu se navštíví jediná konfigurace, a to je ta, která má cenu alespoň jako je minimální povolená cena, tak budu porovnávat parametry `p_visists`, což je počet návštěv nekoncových vrcholů v konfiguraci (tj. tam kde se začne rozhodovat, jestli tam ten předmět dá, nebo nedá).
+Testování provádím na notebooku s procesorem `i5-8350U` a dostatkem RAM paměti na operačním systému ArchLinux. Při měření dbám akorát na to, aby notebook byl pokaždé zapojen do síťě a teda se nesnažil šetřit energii. Vzhledem k tomu, že u rozhodovací verze v prořezávacím algoritmu se navštíví hodně málo konfigurací a není to moc vypovídající výsledek, tak jsem se rozhodl radši měřit čas.
 
-Už z prvotního spouštění jde poznat, že rozdíly implementovaných algoritmů jsou velké. Například testování celého souboru `NR25_inst.dat` ze zadání trvá naivní implementaci celkově 53 sekund a prořezávacímu algoritmu 22 až 42 ms ().
+Už z prvotního spouštění jde poznat, že rozdíly implementovaných algoritmů jsou velké. Například testování celého souboru `NR25_inst.dat` ze zadání trvá naivní implementaci celkově 53 sekund a prořezávacímu algoritmu 22 až 42 ms. Úplně nevím, čím je způsobený takový rozsah, ale mám podezření na to, že se to stane, když nepěkně vyjde přerušení od OS - meřím reálný čas a nikoliv procesorový čas.
+
+| instance | maximální čas | průměrný čas | maximální čas | průměrný čas |
+|:--------:|--------------:|-------------:|--------------:|-------------:|
+|          |  naivní       | naivní       | prořezávání   | prořezávání  |
+| `NR22_inst.dat` | $34,7ms$ | $15,8ms$ | $1,42ms$ | $11,2µs$ |
+| `NR25_inst.dat` | $242,1ms$ | $127,3ms$ | $2,42ms$ | $38,9µs$ |
+| `NR27_inst.dat` | $960,5ms$ | $503,2ms$ | $3.62ms$ | $59,8µs$ |
+| `NR30_inst.dat` | $7,52s$ | - | $17,1ms$ | $170,5µs$ |
+| `NR32_inst.dat` | $30s$ | - | $58,3ms$ | $572,8µs$ |
+| `NR35_inst.dat` | $238s$ | - | $96,9ms$ | $1,29ms$ |
+| `NR37_inst.dat` | - | - | $417,6ms$ | $2,89ms$ |
+| `NR40_inst.dat` | - | - | $1,76s$ | $12,4ms$ |
+| |
+| `ZR22_inst.dat` | $36,9ms$ | $14,7ms$ | $5,03ms$ | $1,09ms$ |
+| `ZR25_inst.dat` | $240,7ms$ | $115,2ms$ | $35,3ms$ | $7,61ms$ |
+| `ZR27_inst.dat` | $969,3ms$ | $461,4ms$ | $122,9ms$ | $26,1ms$ |
+| `ZR30_inst.dat` | - | - | $989,4ms$ | $159,5ms$ |
+| `ZR32_inst.dat` | - | - | $3,38s$ | $574,3ms$ |
+
+Od `NR30_inst.dat` přestává být měření všech instancí na naivním algoritmu časově rozumné - jakmile úloha nemá řešení, tak to trvá téměř ten maximální čas. Od `NR37_inst.dat` přestává být rozumné i měření maximálního času, ale dá se očekávat, že by bylo asi 15 minut. Zatím prořezávací algoritmus se nedostal ani přes sekundu.
+
+Vyhodnocení sad `ZR` bylo už horší. Naivní dopadlo přibližně stejně, ale prořezávání tam už nefunguje tak rychle, proto jsem to vyhodnotil jen do velikosti 32.
+
+
+Prostor k vylepšení
+-------------------
+
+Rust při přístupu do pole dělá automaticky kontrolu hranic a při failnutí spadne - tedy bylo by možné toto deaktivovat, nicméně výrazně se tím zhorší čitelnost kódu. Je potřeba ten přístup obalit do `unsafe` a místo `[]` použít metodu `get_unchecked` nebo `get_unchecked_mut` (podle toho, jestli tam chci zapisovat a nebo jen číst).
