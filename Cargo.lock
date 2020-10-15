@@ -79,8 +79,15 @@ name = "knapsack"
 version = "0.1.0"
 dependencies = [
  "itertools",
+ "lazy_format",
  "structopt",
 ]
+
+[[package]]
+name = "lazy_format"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f389fd31a70d3b0f1d9d80e8f7a9366127fe5fb819f4d4dd21122a167352da8f"
 
 [[package]]
 name = "lazy_static"
