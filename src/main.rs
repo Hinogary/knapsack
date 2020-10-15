@@ -117,6 +117,20 @@ fn main() {
     }
 
     println!(
+        "Maximum p_visits: {} Average p_visits: {}",
+        durations
+            .iter()
+            .map(|(_, _, _, p_visits)| p_visits)
+            .max()
+            .unwrap_or(&0),
+        durations
+            .iter()
+            .map(|(_, _, _, p_visits)| *p_visits)
+            .fold(0f32, |acc, x| acc + x as f32)
+            / durations.len() as f32
+    );
+
+    println!(
         "Maximum time: {:?} Average time: {:?}",
         durations
             .iter()

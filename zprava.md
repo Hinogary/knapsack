@@ -72,12 +72,39 @@ Už z prvotního spouštění jde poznat, že rozdíly implementovaných algorit
 | `ZR22_inst.dat` | $36,9ms$ | $14,7ms$ | $5,03ms$ | $1,09ms$ |
 | `ZR25_inst.dat` | $240,7ms$ | $115,2ms$ | $35,3ms$ | $7,61ms$ |
 | `ZR27_inst.dat` | $969,3ms$ | $461,4ms$ | $122,9ms$ | $26,1ms$ |
-| `ZR30_inst.dat` | - | - | $989,4ms$ | $159,5ms$ |
-| `ZR32_inst.dat` | - | - | $3,38s$ | $574,3ms$ |
+| `ZR30_inst.dat` | $7,52s$ | - | $989,4ms$ | $159,5ms$ |
+| `ZR32_inst.dat` | $30s$ | - | $3,38s$ | $574,3ms$ |
 
 Od `NR30_inst.dat` přestává být měření všech instancí na naivním algoritmu časově rozumné - jakmile úloha nemá řešení, tak to trvá téměř ten maximální čas. Od `NR37_inst.dat` přestává být rozumné i měření maximálního času, ale dá se očekávat, že by bylo asi 15 minut. Zatím prořezávací algoritmus se nedostal ani přes sekundu.
 
 Vyhodnocení sad `ZR` bylo už horší. Naivní dopadlo přibližně stejně, ale prořezávání tam už nefunguje tak rychle, proto jsem to vyhodnotil jen do velikosti 32.
+
+Následuje tabulka s `p_visits`. Téměř odpovídá čas s `p_visits`, jde to například vidět v prořezávání mezi sadou `NR35_inst.dat` a `ZR22_inst.dat`. Obě sady mají `p_visits` lehce přes 200 tisíc a obě trvají v průměru něco přes `1ms`. Dokonce to jde porovnávat i mezi algoritmy. Když vemu naivní algoritmus a sadu `NR22_inst.dat` oproti prořezávání a sadu `NR40_inst.dat`, tak oboje má `p_visits` lehce přes 2 miliony a čas mezi `10ms` a `20ms`. Pro instance velikosti větší než 30 jsou maximální `p_visits` vypočítáno jako $2^{size}-1$, což je případ, kdy řešení neexistuje.
+
+| instance | maximální p_visits | průměrný p_visits | maximální p_visits | průměrný p_visits |
+|:--------:|--------------:|-------------:|--------------:|-------------:|
+|          |  naivní       | naivní       | prořezávání   | prořezávání  |
+| `NR22_inst.dat` | 4 194 303 | 2 247 116,5 | 83 238 | 1 231,2 |
+| `NR25_inst.dat` | 33 554 431 | 18 294 550 | 392 621 | 5 501,6 |
+| `NR27_inst.dat` | 134 217 727 | 72 618 380 | 437 466 | 8 207,8 |
+| `NR30_inst.dat` | 1 073 741 823 | - | 3 401 191 | 29 985,8 |
+| `NR32_inst.dat` | 4 294 967 295 | - | 11 924 299 | 108 674,1 |
+| `NR35_inst.dat` | 34 359 738 367 | - | 20 230 729 | 238 776,3 |
+| `NR37_inst.dat` | 137 438 953 471 | - | 91 246 588 | 575 586,4 |
+| `NR40_inst.dat` | 1 099 511 627 775 | - | 342 530 152 | 2 426 381,5 |
+| |
+| `ZR22_inst.dat` | 4 194 303 | 2 090 824,3 | 1 289 437 | 269 337,7 |
+| `ZR25_inst.dat` | 33 554 431 | 16 620 486 | 7 790 219 | 1 701 290,3 |
+| `ZR27_inst.dat` | 134 217 727 | 66 549 724 | 27 045 462 | 5 861 207 |
+| `ZR30_inst.dat` | 1 073 741 823 | - | 221 313 997 | 36 442 904 |
+| `ZR32_inst.dat` | 4 294 967 295 | - | 769 295 054 | 132 466 840 |
+
+Z uvedených čísel jde vidět, že naivnímu řešení je jedno jakou sadu řeší a trvá pořád přibližně stejně. Naopak prořezávání dává sada `ZR` mnohem víc zabrat a už od velikosti 27 je řešení průměrně delší než největší možné zadání sady `NR`, které je velikosti 40.
+
+![](Figure_1.png)
+![](Figure_2.png)
+
+Z histogramů je zřejmý rozdíl mezi algoritmy. Naivní, když instance řešení nemá, tedy skončí v posledním binu. Zatímco u prořezávání se to nedá odhadnout, protože tam jsou instance, u kterých se prostor téměř neprohledává, protože ceny téměř nedají dohromady ani `min_price`.
 
 
 Prostor k vylepšení
