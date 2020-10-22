@@ -71,10 +71,10 @@ fn main() {
                     .as_str();
             }
             let mut additional_info = "".to_string();
-            if ref_solutions.is_some() && problem.min_cost.is_none() {
+            if ref_solutions.is_some() && (problem.min_cost.is_none() || opts.force_construction) {
                 let reference = ref_solutions.as_ref().unwrap().get(&solution.id).unwrap();
                 if is_exact {
-                    if reference != &solution
+                    if *reference != solution
                         && reference.cost == solution.cost
                         && reference.size == solution.size
                     {
@@ -228,6 +228,30 @@ struct Solution {
     size: usize,
     cost: u32,
     items: Option<Vec<bool>>,
+}
+
+// returns (new items, cost/weight ratios descending, mapping [new array] -> [original array])
+fn sort_by_cost_weight_ratio(items: &Vec<Item>) -> (Vec<Item>, Vec<f32>, Vec<usize>) {
+    let len = items.len();
+    let mut vec = items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| (*item, item.cost as f32 / item.weight as f32, index))
+        .collect::<Vec<_>>();
+    vec.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    vec.into_iter().fold(
+        (
+            Vec::with_capacity(len),
+            Vec::with_capacity(len),
+            Vec::with_capacity(len),
+        ),
+        |(mut items, mut ratios, mut mappings), (item, ratio, mapping)| {
+            items.push(item);
+            ratios.push(ratio);
+            mappings.push(mapping);
+            (items, ratios, mappings)
+        },
+    )
 }
 
 fn calc_remaining_cost(problem: &Problem) -> Vec<u32> {
@@ -560,12 +584,14 @@ fn decision_pruning(problem: &Problem) -> Solution {
 }
 
 fn construction_dynamic_weight(problem: &Problem) -> Solution {
+    let (items, _ratios, mapping) = sort_by_cost_weight_ratio(&problem.items);
+
     let gcd = problem
         .items
         .iter()
-        .fold(problem.items[0].weight, |acc, x| acc.gcd(x.weight)) as usize;
+        .fold(items[0].weight, |acc, x| acc.gcd(x.weight)) as usize;
     let size = problem.max_weight as usize / gcd + 1;
-    let ilen = problem.items.len();
+    let ilen = items.len();
 
     let mut table_raw: Vec<Option<(u32, bool)>> = vec![None; size * (ilen + 1)];
     let mut table_base = table_raw
@@ -583,12 +609,12 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
     stack.push((0usize, 0u32));
     while !stack.is_empty() {
         let (item, weight) = stack.last().unwrap();
-        let with_item = (item + 1, weight + problem.items[*item].weight);
+        let with_item = (item + 1, weight + items[*item].weight);
         let without_item = (item + 1, *weight);
         let mut me_cell = None;
         if with_item.1 <= problem.max_weight {
             if let Some(cell) = table[with_item.0][with_item.1 as usize / gcd] {
-                me_cell = Some((cell.0 + problem.items[*item].cost, true));
+                me_cell = Some((cell.0 + items[*item].cost, true));
             } else {
                 stack.push(with_item);
                 continue;
@@ -614,18 +640,10 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
             table
                 .iter()
                 .take(ilen)
-                .fold((0, 0u32, Vec::with_capacity(ilen)), |(i, w, mut vec), x| {
+                .fold((0, 0u32, vec![false; ilen]), |(i, w, mut vec), x| {
                     let added = x[w as usize / gcd].unwrap().1;
-                    vec.push(added);
-                    (
-                        i + 1,
-                        if added {
-                            w + problem.items[i].weight
-                        } else {
-                            w
-                        },
-                        vec,
-                    )
+                    vec[mapping[i]] = added;
+                    (i + 1, if added { w + items[i].weight } else { w }, vec)
                 })
                 .2,
         ),
