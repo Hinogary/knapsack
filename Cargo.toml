@@ -1,10 +1,11 @@
 [package]
 name = "knapsack"
 version = "0.1.0"
-authors = ["Martin Quarda <martin.quarda@firma.seznam.cz>"]
+authors = ["Martin Quarda <martin@quarda.cz>"]
 edition = "2018"
 
 [dependencies]
 structopt = "0.3"
 itertools = "0.9"
 lazy_format = "1.8"
+gcd = "2.0"

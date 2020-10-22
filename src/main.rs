@@ -9,15 +9,12 @@ use std::fs;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+use gcd::Gcd;
+
 fn main() {
     let opts = Opts::from_args();
 
-    let solver = match (opts.naive, opts.pruning) {
-        (true, false) => Solver::Naive,
-        (false, true) => Solver::Pruning,
-        (false, false) => panic!("Not any solver selected!"),
-        _ => panic!("Too many solvers selected!"),
-    };
+    let solver = Solver::from_opts(&opts);
 
     let input =
         fs::read_to_string(opts.input_task.clone()).expect("Failed to read input_task file!");
@@ -49,18 +46,20 @@ fn main() {
                     solver,
                     problem.min_cost.is_none() || opts.force_construction,
                 ) {
-                    (Solver::Naive, true) => construction_naive(&problem),
-                    (Solver::Naive, false) => decision_naive(&problem),
-                    (Solver::Pruning, true) => construction_pruning(&problem),
-                    (Solver::Pruning, false) => decision_pruning(&problem),
+                    (Naive, true) => construction_naive(&problem),
+                    (Naive, false) => decision_naive(&problem),
+                    (Pruning, true) => construction_pruning(&problem),
+                    (Pruning, false) => decision_pruning(&problem),
+                    (DynamicWeight, true) => construction_dynamic_weight(&problem),
                     #[allow(unreachable_patterns)]
                     _ => unimplemented!(),
                 },
                 start.elapsed(),
                 problem,
+                solver.is_exact(),
             )
         })
-        .map(|(solution, elapsed, problem)| {
+        .map(|(solution, elapsed, problem, is_exact)| {
             let mut output = String::new();
             time += elapsed;
             output += format!("{} {} {}", solution.id, solution.size, solution.cost).as_str();
@@ -71,33 +70,29 @@ fn main() {
                     .join("")
                     .as_str();
             }
-            println!(
-                "time: {:?} visits: {} p_visits: {}\n{}",
-                elapsed,
-                solution.visits.unwrap(),
-                solution.parent_visits.unwrap(),
-                output
-            );
-            if let Some(reference) = ref_solutions
-                .as_ref()
-                .unwrap_or(&HashMap::new())
-                .get(&solution.id)
-            {
-                if reference.cost == solution.cost && reference.size == solution.size {
-                    if reference.items != solution.items {
+            let mut additional_info = "".to_string();
+            if ref_solutions.is_some() && problem.min_cost.is_none() {
+                let reference = ref_solutions.as_ref().unwrap().get(&solution.id).unwrap();
+                if is_exact {
+                    if reference != &solution && reference.cost == solution.cost && reference.size == solution.size {
                         println!("Same cost, but different solution!");
+                    } else {
+                        assert_eq!(*reference, solution);
                     }
                 } else {
-                    assert_eq!(*reference, solution);
+                    additional_info = format!(" ratio of ref solution: {}", solution.cost as f32 / reference.cost as f32);
                 }
-            } else if opts.solution.is_some() && problem.min_cost == None {
-                panic!("Missing reference solution!")
-            };
+            }
+            println!(
+                "time: {:?} {}\n{}",
+                elapsed,
+                additional_info,
+                output
+            );
+
             (
                 solution.id,
                 elapsed,
-                solution.visits.unwrap(),
-                solution.parent_visits.unwrap(),
             )
         })
         .collect::<Vec<_>>();
@@ -108,8 +103,8 @@ fn main() {
             path,
             durations
                 .iter()
-                .map(|(id, elapsed, visits, p_visits)| {
-                    lazy_format!("{} {} {} {}", id, elapsed.as_secs_f64(), visits, p_visits)
+                .map(|(id, elapsed)| {
+                    lazy_format!("{} {}", id, elapsed.as_secs_f64())
                 })
                 .join("\n"),
         )
@@ -117,29 +112,15 @@ fn main() {
     }
 
     println!(
-        "Maximum p_visits: {} Average p_visits: {}",
-        durations
-            .iter()
-            .map(|(_, _, _, p_visits)| p_visits)
-            .max()
-            .unwrap_or(&0),
-        durations
-            .iter()
-            .map(|(_, _, _, p_visits)| *p_visits)
-            .fold(0f32, |acc, x| acc + x as f32)
-            / durations.len() as f32
-    );
-
-    println!(
         "Maximum time: {:?} Average time: {:?}",
         durations
             .iter()
-            .map(|(_, elapsed, _, _)| elapsed)
+            .map(|(_, elapsed)| *elapsed)
             .max()
-            .unwrap_or(&time),
+            .unwrap_or(time),
         durations
             .iter()
-            .map(|(_, elapsed, _, _)| *elapsed)
+            .map(|(_, elapsed)| *elapsed)
             .fold(Duration::new(0, 0), |acc, x| acc + x)
             / (durations.len() as u32)
     );
@@ -151,6 +132,43 @@ fn main() {
 enum Solver {
     Naive,
     Pruning,
+    DynamicWeight,
+    DynamicCost,
+    Greedy,
+    Redux,
+    FTPAS,
+}
+use Solver::*;
+
+impl Solver {
+    fn is_exact(self) -> bool {
+        match self {
+            Naive | Pruning | DynamicWeight | DynamicCost => true,
+            Greedy | Redux | FTPAS => false,
+        }
+    }
+
+    fn from_opts(opts: &Opts) -> Solver {
+        match (
+            opts.naive,
+            opts.pruning,
+            opts.dynamic_weight,
+            opts.dynamic_cost,
+            opts.greedy,
+            opts.redux,
+            opts.ftpas.is_some(),
+        ) {
+            (true, false, false, false, false, false, false) => Naive,
+            (false, true, false, false, false, false, false) => Pruning,
+            (false, false, true, false, false, false, false) => DynamicWeight,
+            (false, false, false, true, false, false, false) => DynamicCost,
+            (false, false, false, false, true, false, false) => Greedy,
+            (false, false, false, false, false, true, false) => Redux,
+            (false, false, false, false, false, false, true) => FTPAS,
+            (false, false, false, false, false, false, false) => panic!("Not any solver selected!"),
+            _ => panic!("Too many solvers selected!"),
+        }
+    }
 }
 
 #[derive(StructOpt, Debug)]
@@ -162,6 +180,16 @@ struct Opts {
     naive: bool,
     #[structopt(short, long)]
     pruning: bool,
+    #[structopt(short, long)]
+    dynamic_weight: bool,
+    #[structopt(short, long)]
+    dynamic_cost: bool,
+    #[structopt(short, long)]
+    greedy: bool,
+    #[structopt(short, long)]
+    redux: bool,
+    #[structopt(short, long)]
+    ftpas: Option<f32>,
     #[structopt(long)]
     save_durations: Option<String>,
     #[structopt(long)]
@@ -189,8 +217,6 @@ struct Problem {
 struct ProblemWithSol {
     p: Problem,
     best_solution: Vec<bool>,
-    visits: u32,
-    parent_visits: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -198,8 +224,6 @@ struct ProblemWithCostRem {
     p: Problem,
     costs_rem: Vec<u32>,
     best_solution: Vec<bool>,
-    visits: u32,
-    parent_visits: u32,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -208,8 +232,6 @@ struct Solution {
     size: usize,
     cost: u32,
     items: Option<Vec<bool>>,
-    visits: Option<u32>,
-    parent_visits: Option<u32>,
 }
 
 fn calc_remaining_cost(problem: &Problem) -> Vec<u32> {
@@ -245,7 +267,7 @@ fn parse_problem_line(line: &str) -> Problem {
     let min_cost = match () {
         () if id < 0 => Some(next_parse(&mut iter)),
         () if id > 0 => None,
-        _ => panic!("zero id not prohibited"),
+        _ => panic!("zero id not permitted"),
     };
     let items = (0..size)
         .map(|_| Item {
@@ -291,8 +313,6 @@ fn parse_solution_line(line: &str) -> Solution {
         size,
         cost,
         items,
-        visits: None,
-        parent_visits: None,
     }
 }
 
@@ -305,7 +325,6 @@ fn construction_naive(problem: &Problem) -> Solution {
         best_cost: u32,
     ) -> u32 /* best_cost */ {
         if index < problem.p.size {
-            problem.parent_visits += 1;
             let best_with_item = rec_fn(
                 problem,
                 cost + problem.p.items[index].cost,
@@ -333,7 +352,6 @@ fn construction_naive(problem: &Problem) -> Solution {
                 _ => unreachable!(),
             }
         } else {
-            problem.visits += 1;
             if weight <= problem.p.max_weight {
                 best_cost.max(cost)
             } else {
@@ -345,18 +363,14 @@ fn construction_naive(problem: &Problem) -> Solution {
     let mut aug_problem = ProblemWithSol {
         p: problem.clone(),
         best_solution: vec![false; problem.size],
-        visits: 0,
-        parent_visits: 0,
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, 0);
-    Solution {
-        id: problem.id,
-        size: problem.size,
-        cost,
-        items: Some(aug_problem.best_solution),
-        visits: Some(aug_problem.visits),
-        parent_visits: Some(aug_problem.parent_visits),
-    }
+     Solution {
+            id: problem.id,
+            size: problem.size,
+            cost,
+            items: Some(aug_problem.best_solution),
+        }
 }
 
 fn decision_naive(problem: &Problem) -> Solution {
@@ -368,7 +382,6 @@ fn decision_naive(problem: &Problem) -> Solution {
         min_cost: u32,
     ) -> u32 /* best_cost */ {
         if index < problem.p.size {
-            problem.parent_visits += 1;
             let best_with_item = rec_fn(
                 problem,
                 cost + problem.p.items[index].cost,
@@ -394,7 +407,6 @@ fn decision_naive(problem: &Problem) -> Solution {
                 _ => unreachable!(),
             }
         } else {
-            problem.visits += 1;
             if weight <= problem.p.max_weight && cost >= min_cost {
                 cost
             } else {
@@ -406,22 +418,18 @@ fn decision_naive(problem: &Problem) -> Solution {
     let mut aug_problem = ProblemWithSol {
         p: problem.clone(),
         best_solution: vec![false; problem.size],
-        visits: 0,
-        parent_visits: 0,
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, problem.min_cost.unwrap());
-    Solution {
-        id: problem.id,
-        size: problem.size,
-        cost,
-        items: if cost > problem.min_cost.unwrap() {
-            Some(aug_problem.best_solution)
-        } else {
-            None
-        },
-        visits: Some(aug_problem.visits),
-        parent_visits: Some(aug_problem.parent_visits),
-    }
+     Solution {
+            id: problem.id,
+            size: problem.size,
+            cost,
+            items: if cost > problem.min_cost.unwrap() {
+                Some(aug_problem.best_solution)
+            } else {
+                None
+            },
+        }
 }
 
 fn construction_pruning(problem: &Problem) -> Solution {
@@ -433,7 +441,6 @@ fn construction_pruning(problem: &Problem) -> Solution {
         best_cost: u32,
     ) -> u32 {
         if index < problem.p.size {
-            problem.parent_visits += 1;
             if cost + problem.costs_rem[index] < best_cost {
                 return best_cost;
             }
@@ -469,7 +476,6 @@ fn construction_pruning(problem: &Problem) -> Solution {
                 _ => unreachable!(),
             }
         } else {
-            problem.visits += 1;
             // I check weight before even going deeper, so it's not important here
             best_cost.max(cost)
         }
@@ -479,18 +485,14 @@ fn construction_pruning(problem: &Problem) -> Solution {
         p: (*problem).clone(),
         costs_rem: calc_remaining_cost(problem),
         best_solution: vec![false; problem.size],
-        visits: 0,
-        parent_visits: 0,
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, 0);
-    Solution {
-        id: problem.id,
-        size: problem.size,
-        cost,
-        items: Some(aug_problem.best_solution),
-        visits: Some(aug_problem.visits),
-        parent_visits: Some(aug_problem.parent_visits),
-    }
+        Solution {
+            id: problem.id,
+            size: problem.size,
+            cost,
+            items: Some(aug_problem.best_solution),
+        }
 }
 
 fn decision_pruning(problem: &Problem) -> Solution {
@@ -502,7 +504,6 @@ fn decision_pruning(problem: &Problem) -> Solution {
         min_cost: u32,
     ) -> u32 {
         if index < problem.p.size {
-            problem.parent_visits += 1;
             if cost + problem.costs_rem[index] < min_cost {
                 return 0;
             }
@@ -536,7 +537,6 @@ fn decision_pruning(problem: &Problem) -> Solution {
                 _ => unreachable!(),
             }
         } else {
-            problem.visits += 1;
             if cost >= min_cost {
                 cost
             } else {
@@ -549,20 +549,20 @@ fn decision_pruning(problem: &Problem) -> Solution {
         p: (*problem).clone(),
         costs_rem: calc_remaining_cost(problem),
         best_solution: vec![false; problem.size],
-        visits: 0,
-        parent_visits: 0,
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, problem.min_cost.unwrap());
-    Solution {
-        id: problem.id,
-        size: problem.size,
-        cost,
-        items: if cost > problem.min_cost.unwrap() {
-            Some(aug_problem.best_solution)
-        } else {
-            None
-        },
-        visits: Some(aug_problem.visits),
-        parent_visits: Some(aug_problem.parent_visits),
-    }
+        Solution {
+            id: problem.id,
+            size: problem.size,
+            cost,
+            items: if cost > problem.min_cost.unwrap() {
+                Some(aug_problem.best_solution)
+            } else {
+                None
+            }
+        }
+}
+
+fn construction_dynamic_weight(problem: &Problem) -> Solution {
+    unimplemented!()
 }
