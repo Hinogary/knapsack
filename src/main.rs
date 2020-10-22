@@ -560,9 +560,74 @@ fn decision_pruning(problem: &Problem) -> Solution {
 }
 
 fn construction_dynamic_weight(problem: &Problem) -> Solution {
-    let weights_gcd = problem
+    let gcd = problem
         .items
         .iter()
-        .fold(problem.items[0].weight, |acc, x| acc.gcd(x.weight));
-    unimplemented!()
+        .fold(problem.items[0].weight, |acc, x| acc.gcd(x.weight)) as usize;
+    let size = problem.max_weight as usize / gcd + 1;
+    let ilen = problem.items.len();
+
+    let mut table_raw: Vec<Option<(u32, bool)>> = vec![None; size * (ilen + 1)];
+    let mut table_base = table_raw
+        .as_mut_slice()
+        .chunks_mut(size)
+        .collect::<Vec<_>>();
+    let table = table_base.as_mut_slice();
+
+    for x in table.last_mut().unwrap().iter_mut() {
+        *x = Some((0, false));
+    }
+
+    let mut stack = Vec::with_capacity(ilen);
+
+    stack.push((0usize, 0u32));
+    while !stack.is_empty() {
+        let (item, weight) = stack.last().unwrap();
+        let with_item = (item + 1, weight + problem.items[*item].weight);
+        let without_item = (item + 1, *weight);
+        let mut me_cell = None;
+        if with_item.1 <= problem.max_weight {
+            if let Some(cell) = table[with_item.0][with_item.1 as usize / gcd] {
+                me_cell = Some((cell.0 + problem.items[*item].cost, true));
+            } else {
+                stack.push(with_item);
+                continue;
+            }
+        }
+        if let Some(cell) = table[without_item.0][without_item.1 as usize / gcd] {
+            let cost_with_item = me_cell.map(|x| x.0).unwrap_or(0);
+            if cell.0 >= cost_with_item {
+                me_cell = Some((cell.0, false));
+            }
+        } else {
+            stack.push(without_item);
+            continue;
+        }
+        table[*item][*weight as usize / gcd] = me_cell;
+        stack.pop();
+    }
+    Solution {
+        id: problem.id,
+        size: problem.size,
+        cost: table[0][0].unwrap().0,
+        items: Some(
+            table
+                .iter()
+                .take(ilen)
+                .fold((0, 0u32, Vec::with_capacity(ilen)), |(i, w, mut vec), x| {
+                    let added = x[w as usize / gcd].unwrap().1;
+                    vec.push(added);
+                    (
+                        i + 1,
+                        if added {
+                            w + problem.items[i].weight
+                        } else {
+                            w
+                        },
+                        vec,
+                    )
+                })
+                .2,
+        ),
+    }
 }
