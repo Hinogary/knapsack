@@ -74,26 +74,24 @@ fn main() {
             if ref_solutions.is_some() && problem.min_cost.is_none() {
                 let reference = ref_solutions.as_ref().unwrap().get(&solution.id).unwrap();
                 if is_exact {
-                    if reference != &solution && reference.cost == solution.cost && reference.size == solution.size {
+                    if reference != &solution
+                        && reference.cost == solution.cost
+                        && reference.size == solution.size
+                    {
                         println!("Same cost, but different solution!");
                     } else {
                         assert_eq!(*reference, solution);
                     }
                 } else {
-                    additional_info = format!(" ratio of ref solution: {}", solution.cost as f32 / reference.cost as f32);
+                    additional_info = format!(
+                        " ratio of ref solution: {}",
+                        solution.cost as f32 / reference.cost as f32
+                    );
                 }
             }
-            println!(
-                "time: {:?} {}\n{}",
-                elapsed,
-                additional_info,
-                output
-            );
+            println!("time: {:?} {}\n{}", elapsed, additional_info, output);
 
-            (
-                solution.id,
-                elapsed,
-            )
+            (solution.id, elapsed)
         })
         .collect::<Vec<_>>();
 
@@ -103,9 +101,7 @@ fn main() {
             path,
             durations
                 .iter()
-                .map(|(id, elapsed)| {
-                    lazy_format!("{} {}", id, elapsed.as_secs_f64())
-                })
+                .map(|(id, elapsed)| lazy_format!("{} {}", id, elapsed.as_secs_f64()))
                 .join("\n"),
         )
         .expect("Failed to save durations!");
@@ -365,12 +361,12 @@ fn construction_naive(problem: &Problem) -> Solution {
         best_solution: vec![false; problem.size],
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, 0);
-     Solution {
-            id: problem.id,
-            size: problem.size,
-            cost,
-            items: Some(aug_problem.best_solution),
-        }
+    Solution {
+        id: problem.id,
+        size: problem.size,
+        cost,
+        items: Some(aug_problem.best_solution),
+    }
 }
 
 fn decision_naive(problem: &Problem) -> Solution {
@@ -420,16 +416,16 @@ fn decision_naive(problem: &Problem) -> Solution {
         best_solution: vec![false; problem.size],
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, problem.min_cost.unwrap());
-     Solution {
-            id: problem.id,
-            size: problem.size,
-            cost,
-            items: if cost > problem.min_cost.unwrap() {
-                Some(aug_problem.best_solution)
-            } else {
-                None
-            },
-        }
+    Solution {
+        id: problem.id,
+        size: problem.size,
+        cost,
+        items: if cost > problem.min_cost.unwrap() {
+            Some(aug_problem.best_solution)
+        } else {
+            None
+        },
+    }
 }
 
 fn construction_pruning(problem: &Problem) -> Solution {
@@ -487,12 +483,12 @@ fn construction_pruning(problem: &Problem) -> Solution {
         best_solution: vec![false; problem.size],
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, 0);
-        Solution {
-            id: problem.id,
-            size: problem.size,
-            cost,
-            items: Some(aug_problem.best_solution),
-        }
+    Solution {
+        id: problem.id,
+        size: problem.size,
+        cost,
+        items: Some(aug_problem.best_solution),
+    }
 }
 
 fn decision_pruning(problem: &Problem) -> Solution {
@@ -551,18 +547,22 @@ fn decision_pruning(problem: &Problem) -> Solution {
         best_solution: vec![false; problem.size],
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, problem.min_cost.unwrap());
-        Solution {
-            id: problem.id,
-            size: problem.size,
-            cost,
-            items: if cost > problem.min_cost.unwrap() {
-                Some(aug_problem.best_solution)
-            } else {
-                None
-            }
-        }
+    Solution {
+        id: problem.id,
+        size: problem.size,
+        cost,
+        items: if cost > problem.min_cost.unwrap() {
+            Some(aug_problem.best_solution)
+        } else {
+            None
+        },
+    }
 }
 
 fn construction_dynamic_weight(problem: &Problem) -> Solution {
+    let weights_gcd = problem
+        .items
+        .iter()
+        .fold(problem.items[0].weight, |acc, x| acc.gcd(x.weight));
     unimplemented!()
 }
