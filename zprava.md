@@ -24,16 +24,16 @@ Příklad zadání argumentů: `knapsack ../NR32_inst.dat --pruning`
 Výstup programu
 ---------------
 
-Na prvním řádku je `time`, to je čas na vyhodnocení jednoho problému, bez počítání doby na načtení a vypsání. Dále tam je `visits`, což je návštěva koncových konfigurací. Poslední na prvním řádku je `p_visits`, což je počet navštívených nekoncových vrcholů.
+Na prvním řádku je `time`, to je čas na vyhodnocení jednoho problému, bez počítání doby na načtení a vypsání.
 
 Na dalším řádku je vypsané řešení ve stejném formátu, v kterém je v zadání. Tedy postupně `id`, `size`, `cost` a `1/0` znázornující, jestli předmět do výsledké konfigurace patří a nebo nepatří. V případě nenalezení řešení v rozhodovacím problému je `cost` nula a bity znázurnující konfiguraci nejsou vypsány. V případě konstruktivní úlohy s porovnáváním, jestli našel správné řešení může být vypsána hláška `Same cost, but different solution!` - tedy výsledné naskládání předmětů bylo jiné, než v referenčním řešení, ale dalo to správnou cenu.
 
 Na posledním řádku je Celkový čas, který je vypočítán jako součet všech `time` jednotlivých podúloh.
 
 ```
-time: 60.762µs visits: 93 p_visits: 9332
+time: 60.762µs
 493 25 28680 1 0 1 1 1 0 1 1 1 0 1 1 1 0 1 1 0 1 1 0 0 0 1 1 1
-time: 298ns visits: 0 p_visits: 1
+time: 298ns
 496 25 0
 ...
 Maximum time: 1.420254ms Average time: 11.261µs
@@ -43,12 +43,18 @@ Total time: 5.630666ms
 Naivní algoritmus
 -----------------
 
-První jsem implementoval naivní algoritmus, ten zkouší každou iteraci rekurzivním průchodem. Po cestě si nasčítává cenu a váhu přidaných itemů, nicméně až nakonci se rozhoduje, jestli překročil váhu, a jestli má maximální cenu. V případě nenalezení řešení, tak platí `visits` = $2^n$ a `p_visits` = $2^n-1$.
+Naivní algoritmus hloupě prohledává všechny konstrukce rekurzivním sestupem, pocestě si akorát průběžně počítá váhu a cenu.
 
 Prořezávací algoritmus
 ----------------------
 
-Funkčnost tohoto algoritmu je podobná jak naivní až na dvě optimalizace. Průběžně zkouší, jestli překročil váhu a při překročení nepokračuje. Navíc kontroluje jestli ve zbývajicích předmětech je dostatečná hodnota na překročení minimální akceptovatelné ceny (u konstruktivní verze to je aktuálně maximální nalezené cena), a když není tak se také ukončí.
+Prořezávací algoritmus používá také rekurzivní sestup, ale je v něm několik optimalizací.
+
+Předměty se seřadí podle poměru `cost / weight` sestupně, takže se první zkouší do batohu dát ty předměty s lepším poměrem a zároveň u toho se vyfiltrují příliš těžké předměty.
+
+Předpočítá se vektor, který je sumou následujicích předmětů a když nezbývá dostatečná cena zbývajicích předmětů na překonání aktuálně nejlepšího výsledku, tak se vrátím v rekurzivním sestupu o úroveň výš.
+
+Také se bere v úvahu zbývajicí kapacita a když poměr `cost / weight` aktuálního předmětu vynásobená zbývajicí kapacitou nepřekoná nejlepší výsledek, tak se vrátím.
 
 Porovnání implementací
 ----------------------
