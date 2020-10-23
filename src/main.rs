@@ -51,6 +51,7 @@ fn main() {
                     (Pruning, true) => construction_pruning(&problem),
                     (Pruning, false) => decision_pruning(&problem),
                     (DynamicWeight, true) => construction_dynamic_weight(&problem),
+                    (DynamicCost, true) => construction_dynamic_cost(&problem),
                     #[allow(unreachable_patterns)]
                     _ => unimplemented!(),
                 },
@@ -254,17 +255,17 @@ fn sort_by_cost_weight_ratio(items: &Vec<Item>) -> (Vec<Item>, Vec<f32>, Vec<usi
     )
 }
 
-fn calc_remaining_cost(problem: &Problem) -> Vec<u32> {
+fn calc_remaining_cost(items: &Vec<Item>) -> Vec<u32> {
     //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
-    problem
-        .items
+    items
         .iter()
         .rev()
         .map(|item| item.cost)
-        .fold(Vec::with_capacity(problem.size), |mut acc, x| {
-            acc.push(x + acc.last().unwrap_or(&0));
-            acc
+        .scan(0, |state, x| {
+            *state += x;
+            Some(*state)
         })
+        .collect::<Vec<_>>()
         .into_iter()
         .rev()
         .collect()
@@ -501,9 +502,11 @@ fn construction_pruning(problem: &Problem) -> Solution {
         }
     }
 
+    let (items, _ratios, mapping) = sort_by_cost_weight_ratio(&problem.items);
+
     let mut aug_problem = ProblemWithCostRem {
-        p: (*problem).clone(),
-        costs_rem: calc_remaining_cost(problem),
+        costs_rem: calc_remaining_cost(&items),
+        p: Problem { items, ..*problem },
         best_solution: vec![false; problem.size],
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, 0);
@@ -511,7 +514,13 @@ fn construction_pruning(problem: &Problem) -> Solution {
         id: problem.id,
         size: problem.size,
         cost,
-        items: Some(aug_problem.best_solution),
+        items: Some(aug_problem.best_solution.into_iter().enumerate().fold(
+            vec![false; problem.size],
+            |mut acc, (i, x)| {
+                acc[mapping[i]] = x;
+                acc
+            },
+        )),
     }
 }
 
@@ -566,8 +575,8 @@ fn decision_pruning(problem: &Problem) -> Solution {
     }
 
     let mut aug_problem = ProblemWithCostRem {
-        p: (*problem).clone(),
-        costs_rem: calc_remaining_cost(problem),
+        p: problem.clone(),
+        costs_rem: calc_remaining_cost(&problem.items),
         best_solution: vec![false; problem.size],
     };
     let cost = rec_fn(&mut aug_problem, 0, 0, 0, problem.min_cost.unwrap());
@@ -598,6 +607,11 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
         .as_mut_slice()
         .chunks_mut(size)
         .collect::<Vec<_>>();
+
+    //tabulka je převrácená oproti přednáškám .. řešení je v [0][0]
+    //první index určuje přidané předměty .. např 0 => jsou přidané věci 0..ilen
+    //druhý index určuje zbývající kapacitu a nevyužitá kapacita je "nahoře"
+
     let table = table_base.as_mut_slice();
 
     for x in table.last_mut().unwrap().iter_mut() {
@@ -639,7 +653,7 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
         items: Some(
             table
                 .iter()
-                .take(ilen)
+                .take(ilen) //skip last
                 .fold((0, 0u32, vec![false; ilen]), |(i, w, mut vec), x| {
                     let added = x[w as usize / gcd].unwrap().1;
                     vec[mapping[i]] = added;
@@ -648,4 +662,8 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
                 .2,
         ),
     }
+}
+
+fn construction_dynamic_cost(problem: &Problem) -> Solution {
+    unimplemented!()
 }
