@@ -176,9 +176,9 @@ struct Opts {
     naive: bool,
     #[structopt(short, long)]
     pruning: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     dynamic_weight: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     dynamic_cost: bool,
     #[structopt(short, long)]
     greedy: bool,
@@ -556,10 +556,25 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
     }
 }
 
+trait ApplyMin{
+    fn apply_min(&mut self, min: u32);
+}
+
+impl ApplyMin for Option<u32> {
+    fn apply_min(&mut self, min: u32){
+        *self = Some((self.unwrap_or(std::u32::MAX)).min(min));
+    }
+}
+
 fn construction_dynamic_cost(problem: &Problem) -> Solution {
     use itertools::FoldWhile::{Continue, Done};
 
-    let (items, _ratios, mapping) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+    let (mut items, _ratios, mut mapping) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+
+    if items.len() == 0 {
+        items.push(Item { weight: std::u32::MAX, cost: 1 });
+        mapping.push(0);
+    }
 
     let gcd = items.iter().fold(items[0].cost, |acc, x| acc.gcd(x.cost)) as usize;
     let ilen = items.len();
@@ -569,7 +584,7 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
     let max_cost = items
         .iter()
         .fold_while((0, 0), |(weight, cost), x| {
-            if weight + x.weight <= problem.max_weight {
+            if weight + x.weight < problem.max_weight {
                 Continue((weight + x.weight, cost + x.cost))
             } else {
                 Done((0, cost + x.cost * weight / (problem.max_weight - weight)))
@@ -577,9 +592,18 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         })
         .into_inner()
         .1;
-    let size = max_cost as usize / gcd;
+    let size = max_cost as usize / gcd + 1;
 
-    let mut table_raw: Vec<Option<u32>> = vec![None; size * ilen];
+    if max_cost == 0 {
+        return Solution {
+            id: problem.id,
+            size: problem.size,
+            cost: 0,
+            items: Some(vec![false; problem.size]),
+        }
+    }
+
+    let mut table_raw: Vec<Option<u32>> = vec![None; size * (ilen+1)];
     let mut table_base = table_raw
         .as_mut_slice()
         .chunks_mut(size)
@@ -587,47 +611,59 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
 
     let table = table_base.as_mut_slice();
 
-    let mut stack = Vec::with_capacity(size);
+    table[0][0] = Some(0);
 
-    stack.push((0, 0));
+    let mut queue = VecDeque::with_capacity(size);
 
-    while !stack.is_empty() {
-        let (item, cost) = stack.last().unwrap();
-        let with_item = (item + 1, cost + items[*item].cost);
-        let without_item = (item + 1, *cost);
-        let mut me_cell = None;
-        if let Some(cell) = table[with_item.0][with_item.1 as usize / gcd] {
-            if cell >= items[*item].weight {
-                me_cell = Some(cell - items[*item].weight);
+    queue.push_back((0, 0));
+
+    while !queue.is_empty() {
+        let (item, cost) = queue.pop_front().unwrap();
+        if item >= ilen {
+            continue;
+        }
+        let with_item = (item + 1, cost + items[item].cost);
+        let without_item = (item + 1, cost);
+        let weight = table[item][cost as usize / gcd].unwrap();
+        let new_weight = weight + items[item].weight;
+        if new_weight <= problem.max_weight{
+            if let Some(value) = table[with_item.0][with_item.1 as usize / gcd] {
+                if value > new_weight {
+                    table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
+                }
+            }else {
+                table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
+                queue.push_back(with_item);
             }
-        } else {
-            stack.push(with_item);
-            continue;
         }
-        if let Some(cell) = table[without_item.0][without_item.1 as usize / gcd] {
-            let rem_cap_with_item = me_cell.map(|x| x).unwrap_or(0);
-            me_cell = Some(cell.max(rem_cap_with_item));
-        } else {
-            stack.push(without_item);
-            continue;
+        if let Some(value) = table[without_item.0][without_item.1 as usize / gcd] {
+            if value > weight {
+                table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
+            }
+        }else {
+            table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
+            queue.push_back(without_item);
         }
-        println!("{:?} {}", stack, me_cell.unwrap());
-        table[*item][*cost as usize / gcd] = me_cell;
-        stack.pop();
     }
 
-    let best_cost = table[ilen - 1]
+    let best_cost = (table
+        .last()
+        .unwrap()
         .iter()
         .enumerate()
         .rev()
         .find(|(_, x)| x.is_some())
         .unwrap()
-        .0 as u32;
+        .0 * gcd) as u32;
+
+    println!("{:?}", table.last());
 
     println!("{}", max_cost);
 
-    let best_solution = table.iter().rev().skip(1).fold(
-        (ilen - 1, best_cost, vec![false; problem.items.len()]),
+    println!("{} {}", table.len(), ilen);
+
+    let best_solution = table.iter().rev().take(ilen).fold(
+        (ilen, best_cost, vec![false; problem.items.len()]),
         |(i, c, mut vec), x| {
             let new_cost = if x[c as usize / gcd].is_some() {
                 c
