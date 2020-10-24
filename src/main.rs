@@ -218,9 +218,8 @@ struct ProblemWithSol {
 }
 
 #[derive(Debug, Clone)]
-struct ProblemWithCostRem {
+struct ProblemWithRatios {
     p: Problem,
-    costs_rem: Vec<u32>,
     ratios: Vec<f32>,
     best_solution: Vec<bool>,
 }
@@ -285,6 +284,7 @@ fn sort_by_cost_weight_ratio(
 fn max_cost(items: &Vec<Item>, max_weight: u32) -> u32 {
     use itertools::FoldWhile::{Continue, Done};
 
+    #[allow(deprecated)] // fold_while no longer deprecated in master
     items
         .iter()
         .fold_while((0, 0), |(weight, cost), x| {
@@ -296,23 +296,6 @@ fn max_cost(items: &Vec<Item>, max_weight: u32) -> u32 {
         })
         .into_inner()
         .1
-}
-
-fn calc_remaining_cost(items: &Vec<Item>) -> Vec<u32> {
-    //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
-    items
-        .iter()
-        .rev()
-        .map(|item| item.cost)
-        .scan(0, |state, x| {
-            *state += x;
-            Some(*state)
-        })
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .chain([0u32].iter().map(|&x| x))
-        .collect()
 }
 
 fn next_parse<'a, T, K>(iter: &mut T) -> K
@@ -440,15 +423,14 @@ fn construction_naive(problem: &Problem) -> Solution {
 
 fn construction_pruning(problem: &Problem) -> Solution {
     fn rec_fn(
-        problem: &mut ProblemWithCostRem,
+        problem: &mut ProblemWithRatios,
         cost: u32,
         weight: u32,
         index: usize,
         best_cost: u32,
     ) -> u32 {
         if index < problem.p.items.len() {
-            if cost + problem.costs_rem[index] < best_cost
-                || (problem.p.max_weight - weight) as f32 * problem.ratios[index] + (cost as f32)
+            if (problem.p.max_weight - weight) as f32 * problem.ratios[index] + (cost as f32)
                     < best_cost as f32
             {
                 return best_cost;
@@ -492,13 +474,17 @@ fn construction_pruning(problem: &Problem) -> Solution {
 
     let (items, ratios, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
 
-    let mut aug_problem = ProblemWithCostRem {
-        costs_rem: calc_remaining_cost(&items),
+    // items are already filtered by weight, so u32::MAX is fine
+    let best_item = best_valued_item_fit(&items, std::u32::MAX);
+
+    let mut aug_problem = ProblemWithRatios {
+        best_solution: (0..items.len()).map(|i| i==best_item.1).collect(),
         p: Problem { items, ..*problem },
-        best_solution: vec![false; problem.size],
         ratios,
     };
-    let cost = rec_fn(&mut aug_problem, 0, 0, 0, 0);
+
+    let cost = rec_fn(&mut aug_problem, 0, 0, 0, best_item.0);
+
     Solution {
         id: problem.id,
         size: problem.size,
@@ -611,8 +597,6 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         mapping.push(0);
     }
 
-    let costs_rem = calc_remaining_cost(&items);
-
     let gcd = items.iter().fold(items[0].cost, |acc, x| acc.gcd(x.cost)) as usize;
     let ilen = items.len();
 
@@ -653,7 +637,7 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
     queue.push_back((0, 0));
 
     // best_cost je nejlepší cena dosáhnuta za 0..(index aktuálního předmětu)
-    let mut best_cost = 0;
+    let mut best_cost = construction_redux(problem).cost;
 
     while !queue.is_empty() {
         let (item, cost) = queue.pop_front().unwrap();
@@ -678,8 +662,7 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         }
 
         // pruning same as in recursive pruning
-        if cost + costs_rem[without_item.0] < best_cost
-            || (problem.max_weight - weight) as f32 * ratios[without_item.0] + (cost as f32)
+        if (problem.max_weight - weight) as f32 * ratios[without_item.0] + (cost as f32)
                 < best_cost as f32
         {
             continue;
@@ -766,19 +749,21 @@ fn construction_greedy(problem: &Problem) -> Solution {
     }
 }
 
+fn best_valued_item_fit(items: &Vec<Item>, max_weight: u32) -> (u32, usize) {
+    items
+    .iter()
+    .enumerate()
+    .fold((0, 0), |(cost, index), (i, item)| {
+        if item.cost > cost && item.weight <= max_weight {
+            (item.cost, i)
+        } else {
+            (cost, index)
+        }
+    })
+}
+
 fn construction_redux(problem: &Problem) -> Solution {
-    let biggest_item_which_fit =
-        problem
-            .items
-            .iter()
-            .enumerate()
-            .fold((0, 0), |(cost, index), (i, item)| {
-                if item.cost > cost && item.weight <= problem.max_weight {
-                    (item.cost, i)
-                } else {
-                    (cost, index)
-                }
-            });
+    let biggest_item_which_fit = best_valued_item_fit(&problem.items, problem.max_weight);
     let greedy = construction_greedy(problem);
     if biggest_item_which_fit.0 > greedy.cost {
         Solution {

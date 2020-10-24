@@ -52,12 +52,20 @@ Prořezávací algoritmus používá také rekurzivní sestup, ale je v něm ně
 
 Předměty se seřadí podle poměru `cost / weight` sestupně, takže se první zkouší do batohu dát ty předměty s lepším poměrem a zároveň u toho se vyfiltrují příliš těžké předměty.
 
-Předpočítá se vektor, který je sumou následujicích předmětů a když nezbývá dostatečná cena zbývajicích předmětů na překonání aktuálně nejlepšího výsledku, tak se vrátím v rekurzivním sestupu o úroveň výš.
+Také se bere v úvahu zbývajicí kapacita a když poměr `cost / weight` aktuálního předmětu vynásobená zbývajicí kapacitou nepřekoná nejlepší výsledek, tak se vrátím. Tady se předpokládá, že nejhorší scénář je, že všechny další předměty budou mít stejný `cost / weight` a tím approximuju maximální cenu, kterou můžou dát při zbývajicí kapacitě. (Optimalizace cost/weight ratia)
 
-Také se bere v úvahu zbývajicí kapacita a když poměr `cost / weight` aktuálního předmětu vynásobená zbývajicí kapacitou nepřekoná nejlepší výsledek, tak se vrátím.
+Počátek nainicializuju tak, že nazačátku nastavím největší item jako řešení a první navštívená konfigurace je konfigurace greedy řešení. Při $1.$ navštívené konfiguraci mám jistotu, že mám řešení alespoň $50%$ maxima možného. Tímpádem mám jistotu, že dokážu celkem efektivně ořezávat, když to je možné.
+
+| instance | všechny optimalizace | bez cost/weight ratia | bez zbývajicích cen |
+|:---------|---------------------:|----------------------:|--------------------:|
+| `ZR40_inst.dat` | $16,4ms$ | - |
+
+Dynamický rozklad podle váh
+---------------------------
 
 Porovnání implementací
 ----------------------
+
 
 Testování provádím na notebooku s procesorem `i5-8350U` a dostatkem RAM paměti na operačním systému ArchLinux. Při měření dbám akorát na to, aby notebook byl pokaždé zapojen do síťě a teda se nesnažil šetřit energii. Vzhledem k tomu, že u rozhodovací verze v prořezávacím algoritmu se navštíví hodně málo konfigurací a není to moc vypovídající výsledek, tak jsem se rozhodl radši měřit čas.
 
