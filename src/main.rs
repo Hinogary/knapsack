@@ -52,6 +52,7 @@ fn main() {
                     (DynamicWeight, true) => construction_dynamic_weight(&problem),
                     (DynamicCost, true) => construction_dynamic_cost(&problem),
                     (Redux, true) => construction_redux(&problem),
+                    (Greedy, true) => construction_greedy(&problem),
                     #[allow(unreachable_patterns)]
                     _ => unimplemented!(),
                 },
@@ -546,6 +547,8 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
         *x = Some((0, false));
     }
 
+    // DFS průchod
+
     let mut stack = Vec::with_capacity(ilen);
 
     stack.push((0usize, 0u32));
@@ -634,18 +637,26 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         .chunks_mut(size)
         .collect::<Vec<_>>();
 
+    // první index určuje přidané věci ... jsou přidané věci 0..index
+    // druhý index určuje dosáhnutou hodnotu
+    // hodnota určuje využitou váhu, tu se snažím minimalizovat
+
     let table = table_base.as_mut_slice();
 
     table[0][0] = Some(0);
 
+    // BFS průchod, VecDeque je ring buffer
+    // indexy v queue jsou seřazené podle indexů itemů, ale ne nutně v pořadí podle ceny
+
     let mut queue = VecDeque::with_capacity(size);
 
     queue.push_back((0, 0));
+
+    // best_cost je nejlepší cena dosáhnuta za 0..(index aktuálního předmětu)
     let mut best_cost = 0;
 
     while !queue.is_empty() {
         let (item, cost) = queue.pop_front().unwrap();
-        best_cost = best_cost.max(cost);
         if item >= ilen {
             continue;
         }
@@ -654,6 +665,7 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         let weight = table[item][cost as usize / gcd].unwrap();
         let new_weight = weight + items[item].weight;
         if new_weight <= problem.max_weight {
+            best_cost = best_cost.max(with_item.1);
             if let Some(value) = table[with_item.0][with_item.1 as usize / gcd] {
                 if value > new_weight {
                     table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
@@ -664,18 +676,21 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
                 queue.push_back(with_item);
             }
         }
+
+        // pruning same as in recursive pruning
+        if cost + costs_rem[without_item.0] < best_cost
+            || (problem.max_weight - weight) as f32 * ratios[without_item.0] + (cost as f32)
+                < best_cost as f32
+        {
+            continue;
+        }
+
         if let Some(value) = table[without_item.0][without_item.1 as usize / gcd] {
             if value > weight {
                 table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
                 // it is already in queue, no need to push again
             }
         } else {
-            if cost + costs_rem[without_item.0] < best_cost
-                || (problem.max_weight - weight) as f32 * ratios[without_item.0] + (cost as f32)
-                    < best_cost as f32
-            {
-                continue;
-            }
             table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
             queue.push_back(without_item);
         }
@@ -730,8 +745,53 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
     }
 }
 
+fn construction_greedy(problem: &Problem) -> Solution {
+    let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+    let (items, _, cost) = items.iter().enumerate().fold(
+        (vec![false; problem.items.len()], problem.max_weight, 0),
+        |(mut items, rem_weight, cost), (i, item)| {
+            if rem_weight >= item.weight {
+                items[mappings[i]] = true;
+                (items, rem_weight - item.weight, cost + item.cost)
+            } else {
+                (items, rem_weight, cost)
+            }
+        },
+    );
+    Solution {
+        id: problem.id,
+        size: problem.size,
+        items: Some(items),
+        cost,
+    }
+}
+
 fn construction_redux(problem: &Problem) -> Solution {
-    //    let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
-    //    let biggest_item = items.iter().enumerate().fold((cost, i), |(cost, index), (i, item)| if item.cost > cost &&)
-    unimplemented!()
+    let biggest_item_which_fit =
+        problem
+            .items
+            .iter()
+            .enumerate()
+            .fold((0, 0), |(cost, index), (i, item)| {
+                if item.cost > cost && item.weight <= problem.max_weight {
+                    (item.cost, i)
+                } else {
+                    (cost, index)
+                }
+            });
+    let greedy = construction_greedy(problem);
+    if biggest_item_which_fit.0 > greedy.cost {
+        Solution {
+            id: problem.id,
+            size: problem.size,
+            cost: biggest_item_which_fit.0,
+            items: Some(
+                (0..problem.size)
+                    .map(|i| i == biggest_item_which_fit.1)
+                    .collect(),
+            ),
+        }
+    } else {
+        greedy
+    }
 }
