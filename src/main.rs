@@ -6,6 +6,7 @@ use lazy_format::lazy_format;
 
 use std::collections::{HashMap, VecDeque};
 use std::fs;
+use std::mem::size_of;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -231,6 +232,26 @@ struct Solution {
     items: Option<Vec<bool>>,
 }
 
+impl Solution {
+    fn empty(id: u32, size: usize) -> Solution {
+        Solution {
+            id,
+            size,
+            cost: 0,
+            items: Some(vec![false; size]),
+        }
+    }
+
+    fn none(id: u32, size: usize) -> Solution {
+        Solution {
+            id,
+            size,
+            cost: 0,
+            items: None,
+        }
+    }
+}
+
 // returns (new items, cost/weight ratios descending, mapping [new array] -> [original array])
 fn sort_by_cost_weight_ratio(
     items: &Vec<Item>,
@@ -259,6 +280,23 @@ fn sort_by_cost_weight_ratio(
     )
 }
 
+// Calculates maximum possible cost ... takes sorted items by cost/weight ratios
+fn max_cost(items: &Vec<Item>, max_weight: u32) -> u32 {
+    use itertools::FoldWhile::{Continue, Done};
+
+    items
+        .iter()
+        .fold_while((0, 0), |(weight, cost), x| {
+            if weight + x.weight < max_weight {
+                Continue((weight + x.weight, cost + x.cost))
+            } else {
+                Done((0, cost + x.cost * x.weight / (max_weight - weight)))
+            }
+        })
+        .into_inner()
+        .1
+}
+
 fn calc_remaining_cost(items: &Vec<Item>) -> Vec<u32> {
     //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
     items
@@ -272,6 +310,7 @@ fn calc_remaining_cost(items: &Vec<Item>) -> Vec<u32> {
         .collect::<Vec<_>>()
         .into_iter()
         .rev()
+        .chain([0u32].iter().map(|&x| x))
         .collect()
 }
 
@@ -556,54 +595,40 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
     }
 }
 
-trait ApplyMin{
-    fn apply_min(&mut self, min: u32);
-}
-
-impl ApplyMin for Option<u32> {
-    fn apply_min(&mut self, min: u32){
-        *self = Some((self.unwrap_or(std::u32::MAX)).min(min));
-    }
-}
-
 fn construction_dynamic_cost(problem: &Problem) -> Solution {
-    use itertools::FoldWhile::{Continue, Done};
-
-    let (mut items, _ratios, mut mapping) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+    let (mut items, mut ratios, mut mapping) =
+        sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+    ratios.push(0.0);
 
     if items.len() == 0 {
-        items.push(Item { weight: std::u32::MAX, cost: 1 });
+        items.push(Item {
+            weight: std::u32::MAX,
+            cost: 0,
+        });
         mapping.push(0);
     }
+
+    let costs_rem = calc_remaining_cost(&items);
 
     let gcd = items.iter().fold(items[0].cost, |acc, x| acc.gcd(x.cost)) as usize;
     let ilen = items.len();
 
     // if we take first k items and part of the first item, which do not fit, we get maximal possible cost
     #[allow(deprecated)] // fold_while is not anymore deprecated in master
-    let max_cost = items
-        .iter()
-        .fold_while((0, 0), |(weight, cost), x| {
-            if weight + x.weight < problem.max_weight {
-                Continue((weight + x.weight, cost + x.cost))
-            } else {
-                Done((0, cost + x.cost * weight / (problem.max_weight - weight)))
-            }
-        })
-        .into_inner()
-        .1;
-    let size = max_cost as usize / gcd + 1;
+    let max_cost = max_cost(&items, problem.max_weight);
+
+    let size = max_cost as usize / gcd.max(1) + 1;
 
     if max_cost == 0 {
-        return Solution {
-            id: problem.id,
-            size: problem.size,
-            cost: 0,
-            items: Some(vec![false; problem.size]),
-        }
+        return Solution::empty(problem.id, problem.size);
     }
 
-    let mut table_raw: Vec<Option<u32>> = vec![None; size * (ilen+1)];
+    if size * (ilen + 1) * size_of::<Option<u32>>() > 8_000_000_000 {
+        println!("Needed allocations are over 8 GB!");
+        return Solution::none(problem.id, problem.size);
+    }
+
+    let mut table_raw: Vec<Option<u32>> = vec![None; size * (ilen + 1)];
     let mut table_base = table_raw
         .as_mut_slice()
         .chunks_mut(size)
@@ -616,9 +641,11 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
     let mut queue = VecDeque::with_capacity(size);
 
     queue.push_back((0, 0));
+    let mut best_cost = 0;
 
     while !queue.is_empty() {
         let (item, cost) = queue.pop_front().unwrap();
+        best_cost = best_cost.max(cost);
         if item >= ilen {
             continue;
         }
@@ -626,12 +653,13 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         let without_item = (item + 1, cost);
         let weight = table[item][cost as usize / gcd].unwrap();
         let new_weight = weight + items[item].weight;
-        if new_weight <= problem.max_weight{
+        if new_weight <= problem.max_weight {
             if let Some(value) = table[with_item.0][with_item.1 as usize / gcd] {
                 if value > new_weight {
                     table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
+                    // it is already in queue, no need to push again
                 }
-            }else {
+            } else {
                 table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
                 queue.push_back(with_item);
             }
@@ -639,8 +667,15 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         if let Some(value) = table[without_item.0][without_item.1 as usize / gcd] {
             if value > weight {
                 table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
+                // it is already in queue, no need to push again
             }
-        }else {
+        } else {
+            if cost + costs_rem[without_item.0] < best_cost
+                || (problem.max_weight - weight) as f32 * ratios[without_item.0] + (cost as f32)
+                    < best_cost as f32
+            {
+                continue;
+            }
             table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
             queue.push_back(without_item);
         }
@@ -654,30 +689,38 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         .rev()
         .find(|(_, x)| x.is_some())
         .unwrap()
-        .0 * gcd) as u32;
+        .0
+        * gcd) as u32;
 
-    println!("{:?}", table.last());
-
-    println!("{}", max_cost);
-
-    println!("{} {}", table.len(), ilen);
-
-    let best_solution = table.iter().rev().take(ilen).fold(
-        (ilen, best_cost, vec![false; problem.items.len()]),
-        |(i, c, mut vec), x| {
-            let new_cost = if x[c as usize / gcd].is_some() {
-                c
-            } else {
-                vec[mapping[i]] = true;
-                c - items[i].cost
-            };
-            (i - 1, new_cost, vec)
-        },
-    ).2;
-
-    //println!("{:#?}", table);
-
-    println!("{:?}", problem);
+    let best_solution = table
+        .iter()
+        .rev()
+        .skip(1)
+        .fold(
+            (
+                ilen - 1,
+                best_cost,
+                problem.max_weight,
+                vec![false; problem.items.len()],
+            ),
+            |(i, rem_cost, rem_weight, mut vec), x| {
+                let (new_cost, rem_weight) = if let Some(w) = x[rem_cost as usize / gcd] {
+                    if w <= rem_weight {
+                        (rem_cost, w)
+                    } else {
+                        vec[mapping[i]] = true;
+                        let rem_cost = rem_cost - items[i].cost;
+                        (rem_cost, x[rem_cost as usize / gcd].unwrap())
+                    }
+                } else {
+                    vec[mapping[i]] = true;
+                    let rem_cost = rem_cost - items[i].cost;
+                    (rem_cost, x[rem_cost as usize / gcd].unwrap())
+                };
+                (i - 1, new_cost, rem_weight, vec)
+            },
+        )
+        .3;
 
     Solution {
         id: problem.id,
@@ -687,9 +730,8 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
     }
 }
 
-
-fn construction_redux(problem: &Problem) -> Solution{
-//    let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
-//    let biggest_item = items.iter().enumerate().fold((cost, i), |(cost, index), (i, item)| if item.cost > cost &&)
+fn construction_redux(problem: &Problem) -> Solution {
+    //    let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+    //    let biggest_item = items.iter().enumerate().fold((cost, i), |(cost, index), (i, item)| if item.cost > cost &&)
     unimplemented!()
 }
