@@ -73,7 +73,7 @@ Opět algoritmus obsahuje optimalizaci filtrace a řazení, ale navíc v této v
 FTPAS
 -----
 
-Tento algoritmus je naprosto totožný, jak rozklad podle cen. Jediný rozdíl je, že před předáním do rozkladu podle cen se první všechny ceny vydělí vynuceným dělitelem a modulo ceny se zanedbá.
+Tento algoritmus je naprosto totožný, jak rozklad podle cen. Jediný rozdíl je, že před předáním do rozkladu podle cen se první všechny ceny vydělí vynuceným dělitelem a modulo ceny se zanedbá. Při zadání čísla, které je mocnina dvojky, tak metoda degraduje na metodu zanedbání bitů z přednášky.
 
 Označíme si počet předmětů jako $n$, vynucený dělitel jako $gcd$. Naivně se dá maximální chyba odhadnout jako $n . (gcd - 1)$. Nicméně když máme už konkrétní instanci, tak to můžem udělat lépe. Můžeme spočítat, kolik nejvýše se vejde předmětů do batohu, označím $m$ (například seřadíme váhy vzestupně a berem tolik předmětů, kolik se jich vejde do batohu). Pak seřadíme zbytky cen po vydělení $gcd$ a součet prvních nejvyších $m$ zbytků je maximální možná chyba.
 
@@ -89,15 +89,17 @@ Testování probíhá na procesoru `AMD 2700X` s frekvencí staticky nastavenou 
 Testování exaktních metod
 -------------------------
 
-Pro testování výkonnosti jsem na všech 3 setech (NK, ZKC, ZKW) spustil pro všechny velikosti 10x všechny solvery, kromě naivního, který jsem spustil jen do velikosti 22. Celkem to trvalo 15 min, což není až tak hrozný vzhledem k tomu, že se vše opakovalo 10x. Průměry a maxima jsem zprůměroval.
+Pro testování výkonnosti jsem na všech 3 setech (NK, ZKC, ZKW) spustil pro všechny velikosti 10x všechny solvery, kromě naivního, který jsem spustil jen do velikosti 22. Celkem to trvalo 15 min, což není hrozný vzhledem k tomu, že se vše opakovalo 10x. Průměry i maxima jsem zprůměroval.
 
-Červená je naivní, fialová prořezávání, modrá rozklad podle váhy a zelená rozklad podle ceny. Plná čára je průměr a přerušovaná maximum.
+<span style="color:red">Červená</span> je naivní, <span style="color:purple">fialová</span> prořezávání, <span style="color:blue">modrá</span> rozklad podle váhy a <span style="color:green">zelená</span> rozklad podle ceny. <span style="text-decoration: underline">Plná čára je průměr</span> a <span style="text-decoration:underline dashed">přerušovaná maximum</span>. Na grafech je čas v logaritmickém měřítku, aby tam šlo něco rozpoznat u rychlejších metod.
 
 ![](NK.png)
 
 ![](ZKC.png)
 
 ![](ZKW.png)
+
+Následuje tabulka s přesnýma číslama k velikosti instance 20 a 40.
 
 |  | prořezávání | rozklad podle váh | rozklad podle cen |
 |---------|--:|--:|--:|
@@ -107,12 +109,14 @@ Pro testování výkonnosti jsem na všech 3 setech (NK, ZKC, ZKW) spustil pro v
 | `NK40` |
 | průměrný čas | $23,3ms$ | $658,4µs$ | $5,1ms$ |
 | maximální čas | $839,4ms$ | $2,7ms$ | $162,7ms$ |
+||
 | `ZKC20` |
 | průměrný čas | $17,7µs$ | $159,9µs$ | $1,4ms$ |
 | maximální čas | $65,2µs$ | $392,1µs$ | $83,5ms$ |
 | `ZKC40` |
 | průměrný čas | $10,8ms$ | $723,5µs$ | $7,7ms$ |
 | maximální čas | $157,1ms$ | $2,0ms$ | $159,9ms$ |
+||
 | `ZKW20` |
 | průměrný čas | $1,7µs$ | $9,3µs$ | $620,2µs$ |
 | maximální čas | $7,0µs$ | $83,5µs$ | $9,4ms$ |
@@ -128,14 +132,44 @@ Rozklad podle ceny je pomalejší než rozklad podle váhy, ale jeho význam je 
 
 Obecně platí, že pro malé instance je nejlepší prořezávání, ale jakmile je velikost dostatečně velká, tak začíná být lepší rozklad podle váhy a dá se předpokládat, že ten se tam udrží
 
+Testování approximačních metod
+------------------------------
 
+Testování probíhá na instanci `NK40`, která má 500 problémů. Greedy ani neuvádím, na sadě `NK40` dopadlo stejně, jak redux a je rychlejší o pár desetin mikrosekundy, které se dají spíš přisuzovat náhodě. Na sadě `NK37` mělo greedy o jednu chybu víc.
 
+Průměrná a relativní chyba je spočítaná jen přes chybující problémy, správné do výpočtu nejsou započítaný. Výpočet maximální chyby je nastíněný v části FTPAS.
 
-Vzhledem k krátkým časům nemá smysl zkoušet FTPAS. Vzhledem k velikosti nemá smysl ani naivní implementace.
+| `NK40`                    | redux   | ftpas 1   | ftpas 2     | ftpas 5   | ftpas 10  | ftpas 50 | ftpas 100 | ftpas 200 |
+|---------------------------|--------:|----------:|------------:|----------:|----------:|---------:|----------:|----------:|
+| průměrný čas              | $3,3µs$ | $5,0ms$   | $2,0ms$     | $782,1µs$ | $427,4µs$ | $92,4µs$ | $51,9µs$  | $27,2µs$  |
+| maximální čas             | $8,5µs$ | $155,0ms$ | $76,8ms$    | $30,1ms$  | $15,3ms$  | $2,8ms$  | $1,5ms$   | $492,8µs$ |
+| počet chyb                | $260$   | $0$       | $1$         | $9$       | $12$      | $60$     | $121$     | $213$     |
+| průměrná chyba            | $218,9$ | $0$       | $2$         | $2,3$     | $3,1$     | $27,2$   | $53,5$    | $111,7$   |
+| průměrná relativní chyba  | -       | -         | $12,5\%$    | $3,3\%$   | $2,1\%$   | $3,4\%$  | $3,4\%$   | $3,6\%$   |
+| maximální relativní chyba | -       | -         | $12,5\%$    | $4,8\%$   | $6,3\%$   | $14,3\%$ | $16,9\%$  | $12,7\%$  |
 
-Zadání NK
----------
+| `ZKC40`                   | redux   | ftpas 1   | ftpas 2     | ftpas 5   | ftpas 10  | ftpas 50  | ftpas 100 | ftpas 200 |
+|---------------------------|--------:|----------:|------------:|----------:|----------:|----------:|----------:|----------:|
+| průměrný čas              | $3,2µs$ | $7,59ms$  | $2,0ms$     | $1,1ms$   | $544,5µs$ | $122,8µs$ | $61,6µs$  | $31,1µs$  |
+| maximální čas             | $8,54s$ | $157,5ms$ | $76,8ms$    | $32,1ms$  | $15,6ms$  | $2,8ms$   | $1,4ms$   | $539,9µs$ |
+| počet chyb                | $485$   | $0$       | $71$        | $229$     | $327$     | $453$     | $474$     | $500$     |
+| průměrná chyba            | $884,9$ | $0$       | $1,3$       | $3,4$     | $6,2$     | $28,2$    | $66,5$    | $415,2$   |
+| průměrná relativní chyba  | -       | -         | $6,5\%$     | $4,4\%$   | $3,6\%$   | $3,1\%$   | $3.5\%$   | $11,2\%$  |
+| maximální relativní chyba | -       | -         | $16,6\%$    | $14,1\%$  | $13,1\%$  | $8,1\%$   | $21,2\%$  | $32,7\%$  |
+
+Dataset `NKW` jsem vynechal, protože většina předmětů je vyfiltrována a tak tam moc správných odpovědí ani nezůstává. Např. `NKW40` s dělitelem 256 obsahoval pouze 3 chyby.
+
+FTPAS časově dopadl podle očekávání, při gcd 1 dopadl nastejno s rozkladem podle cen, a pak lineárně zvyšoval čas podle zvoleného gcd. Redux je velmi jednoduchá taktika jen s jedním řazením, tak překonat ho složitějším FTPASem je možný až když jeho přesnost začíná být zoufalá.
+
+Ohledně chyb na `NK40` dopadl silně nad očekávání. dokonce i s největším dělitelem 200 chyboval v méně než polovině instancí. Dokonce tam kde chyboval, tak procento možný chyby je pouze 4%.
+
 
 
 Závěr
 -----
+
+V exaktních metodách se mě povedlo výrazně vylepšit ořezávání, že dokonce největší instance je velice rychlá. Překvapením pro mě bylo zjištění, že `NK40` je hůře ořezatelná, než `ZKC`, která by měla podle instrukcí být navržená tak, aby nebyla ořezatelná. Provedl jsem oba rozklady a mám z toho závěr, že rozklad podle váhy je vhodnější, pravděpodobně protože je možné lépe omezit maximální váhu, než cenu. Rozklad podle váhy má výhodu v approximaci s povolenou chybou, protože je možné určit, kolik je její hodnota.
+
+Rozklady mají mnohem větší overhead při menších instancích. Zvlášt rozklad podle ceny, na to je citlivý. Pro malé instance se tedy víc vyplatí prořezávání. Od určité velikosti ale vyhrává dynamické programování, pokud jsou ceny a váhy v rozumném rozpětí.
+
+Metoda FTPAS dopadla výborně na datasetu `NK`, kde při zvoleném děliteli 10 překonala rychlost rozkladu podle váhy s minimálním počtem chyb. Výrazně hůř dopadla na datasetu `ZKC`, kdy při překonání rychlosti rozkladu podle váhy už chybovala ve více než polovině instancí. Všechny problémy v datasetu `NKC40` mají cílovou cenu přes $30 000$, tedy průměrná chyba $6,2$ není až tak významná.
