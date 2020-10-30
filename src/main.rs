@@ -193,19 +193,19 @@ impl Solver {
 struct Opts {
     input_task: String,
     solution: Option<String>,
-    #[structopt(short, long)]
+    #[structopt(long)]
     naive: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     pruning: bool,
     #[structopt(long)]
     dynamic_weight: bool,
     #[structopt(long)]
     dynamic_cost: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     greedy: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     redux: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     ftpas: Option<u32>,
     #[structopt(long)]
     save_durations: Option<String>,
@@ -275,6 +275,7 @@ fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
     use itertools::FoldWhile::{Continue, Done};
     let mut items = problem.items.clone();
     items.sort_by(|a, b| a.weight.cmp(&b.weight));
+    #[allow(deprecated)]
     let m = items
         .iter()
         .fold_while((0, 0), |(weight, i), item| {
@@ -327,14 +328,10 @@ fn max_cost(items: &Vec<Item>, max_weight: u32) -> u32 {
     items
         .iter()
         .fold_while((0, 0), |(weight, cost), x| {
-            if weight + x.weight <= max_weight {
+            if weight + x.weight < max_weight {
                 Continue((weight + x.weight, cost + x.cost))
             } else {
-                if weight == max_weight {
-                    Done((0, cost))
-                } else {
-                    Done((0, cost + x.cost * x.weight / (max_weight - weight)))
-                }
+                Done((0, cost + x.cost * x.weight / (max_weight - weight)))
             }
         })
         .into_inner()

@@ -91,7 +91,7 @@ Testování exaktních metod
 
 Pro testování výkonnosti jsem na všech 3 setech (NK, ZKC, ZKW) spustil pro všechny velikosti 10x všechny solvery, kromě naivního, který jsem spustil jen do velikosti 22. Celkem to trvalo 15 min, což není hrozný vzhledem k tomu, že se vše opakovalo 10x. Průměry i maxima jsem zprůměroval.
 
-<span style="color:red">Červená</span> je naivní, <span style="color:purple">fialová</span> prořezávání, <span style="color:blue">modrá</span> rozklad podle váhy a <span style="color:green">zelená</span> rozklad podle ceny. <span style="text-decoration: underline">Plná čára je průměr</span> a <span style="text-decoration:underline dashed">přerušovaná maximum</span>. Na grafech je čas v logaritmickém měřítku, aby tam šlo něco rozpoznat u rychlejších metod.
+<span style="color:red">Červená</span> je naivní, <span style="color:purple">fialová</span> prořezávání, <span style="color:blue">modrá</span> rozklad podle váhy a <span style="color:green">zelená</span> rozklad podle ceny. <span style="text-decoration: underline">Plná čára je průměr</span> a <span style="text-decoration:underline dotted">přerušovaná maximum</span>. Na grafech je čas v logaritmickém měřítku, aby tam šlo něco rozpoznat u rychlejších metod.
 
 ![](NK.png)
 
