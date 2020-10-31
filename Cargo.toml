@@ -9,6 +9,7 @@ structopt = "0.3"
 itertools = "0.9"
 lazy_format = "1.8"
 gcd = "2.0"
+derive_more = "0.99"
 
 [profile.release]
 lto="thin"
