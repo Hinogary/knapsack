@@ -6,11 +6,14 @@ use lazy_format::lazy_format;
 
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::mem::size_of;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use gcd::Gcd;
+
+use num_rational::Ratio;
+
+type ratio = Ratio<u32>;
 
 fn main() {
     let opts = Opts::from_args();
@@ -53,16 +56,19 @@ fn main() {
                     (DynamicCost, true) => construction_dynamic_cost(&problem),
                     (Redux, true) => construction_redux(&problem),
                     (Greedy, true) => construction_greedy(&problem),
+                    (FTPAS, true) => construction_ftpas(&problem, opts.ftpas.unwrap()),
                     #[allow(unreachable_patterns)]
                     _ => unimplemented!(),
                 },
                 start.elapsed(),
                 problem,
                 solver.is_exact(),
+                solver,
             )
         })
-        .map(|(solution, elapsed, problem, is_exact)| {
+        .map(|(solution, elapsed, problem, is_exact, solver)| {
             let mut output = String::new();
+            //println!("{:?}", problem);
             time += elapsed;
             output += format!("{} {} {}", solution.id, solution.size, solution.cost).as_str();
             if let Some(items) = &solution.items {
@@ -85,10 +91,28 @@ fn main() {
                         assert_eq!(*reference, solution);
                     }
                 } else {
-                    additional_info = format!(
-                        " ratio of ref solution: {}",
-                        solution.cost as f32 / reference.cost as f32
-                    );
+                    let absolute_error = reference.cost - solution.cost;
+                    let ref_cost = reference.cost as f32;
+                    let cost = solution.cost as f32;
+                    let relative_error = (ref_cost - cost) / ref_cost;
+
+                    if solver == FTPAS {
+                        let gcd = opts.ftpas.unwrap();
+                        let practical_error = calculate_practical_ftpas_error(&problem, gcd);
+
+                        additional_info = format!(
+                            " errors: ratio: {} absolute: {} max possible: {} ratio: {}",
+                            relative_error,
+                            absolute_error,
+                            practical_error,
+                            absolute_error as f32 / practical_error as f32
+                        );
+                    } else {
+                        additional_info = format!(
+                            "errors: ratio: {} absolute: {}",
+                            relative_error, absolute_error
+                        );
+                    }
                 }
             }
             println!("time: {:?} {}\n{}", elapsed, additional_info, output);
@@ -109,24 +133,60 @@ fn main() {
         .expect("Failed to save durations!");
     }
 
-    println!(
-        "Maximum time: {:?} Average time: {:?}",
-        durations
-            .iter()
-            .map(|(_, elapsed)| *elapsed)
-            .max()
-            .unwrap_or(time),
-        durations
-            .iter()
-            .map(|(_, elapsed)| *elapsed)
-            .fold(Duration::new(0, 0), |acc, x| acc + x)
-            / (durations.len() as u32)
-    );
+    let max_time = durations
+        .iter()
+        .map(|(_, elapsed)| *elapsed)
+        .max()
+        .unwrap_or(time);
+
+    let avg_time = durations
+        .iter()
+        .map(|(_, elapsed)| *elapsed)
+        .fold(Duration::new(0, 0), |acc, x| acc + x)
+        / (durations.len() as u32);
+
+    println!("Maximum time: {:?} Average time: {:?}", max_time, avg_time);
 
     println!("Total time: {:?}", time);
+
+    println!("{} {}", max_time.as_secs_f64(), avg_time.as_secs_f64())
 }
 
-#[derive(Debug, Copy, Clone)]
+fn calc_remaining_weight(items: &[Item]) -> Vec<u32> {
+    //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
+    items
+        .iter()
+        .rev()
+        .map(|item| item.weight)
+        .scan(0, |state, x| {
+            *state += x;
+            Some(*state)
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .chain([0u32].iter().cloned())
+        .collect()
+}
+
+fn calc_remaining_cost(items: &[Item]) -> Vec<u32> {
+    //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
+    items
+        .iter()
+        .rev()
+        .map(|item| item.cost)
+        .scan(0, |state, x| {
+            *state += x;
+            Some(*state)
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .chain([0u32].iter().cloned())
+        .collect()
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Solver {
     Naive,
     Pruning,
@@ -187,14 +247,14 @@ struct Opts {
     #[structopt(short, long)]
     redux: bool,
     #[structopt(short, long)]
-    ftpas: Option<f32>,
+    ftpas: Option<u32>,
     #[structopt(long)]
     save_durations: Option<String>,
     #[structopt(long)]
     force_construction: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Item {
     weight: u32,
     cost: u32,
@@ -220,7 +280,9 @@ struct ProblemWithSol {
 #[derive(Debug, Clone)]
 struct ProblemWithRatios {
     p: Problem,
-    ratios: Vec<f32>,
+    ratios: Vec<ratio>,
+    rem_weight: Vec<u32>,
+    rem_cost: Vec<u32>,
     best_solution: Vec<bool>,
 }
 
@@ -252,19 +314,44 @@ impl Solution {
     }
 }
 
+fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
+    use itertools::FoldWhile::{Continue, Done};
+    let mut items = problem.items.clone();
+    items.sort_by(|a, b| a.weight.cmp(&b.weight));
+    #[allow(deprecated)]
+    let m = items
+        .iter()
+        .fold_while((0, 0), |(weight, i), item| {
+            if weight + item.weight <= problem.max_weight {
+                Continue((weight + item.weight, i + 1))
+            } else {
+                Done((0, i))
+            }
+        })
+        .into_inner()
+        .1;
+    let mut gcds = items
+        .into_iter()
+        .map(|item| item.cost % gcd)
+        .collect::<Vec<_>>();
+    gcds.sort_unstable_by(|a, b| b.cmp(a));
+    gcds[0..m].iter().sum()
+}
+
 // returns (new items, cost/weight ratios descending, mapping [new array] -> [original array])
-fn sort_by_cost_weight_ratio(
-    items: &Vec<Item>,
-    max_weight: u32,
-) -> (Vec<Item>, Vec<f32>, Vec<usize>) {
+fn sort_by_cost_weight_ratio(items: &[Item], max_weight: u32) -> (Vec<Item>, Vec<ratio>, Vec<usize>) {
+    use std::cmp::Ordering;
     let len = items.len();
     let mut vec = items
         .iter()
         .enumerate()
-        .map(|(index, item)| (*item, item.cost as f32 / item.weight as f32, index))
+        .map(|(index, item)| (*item, ratio::new(item.cost, item.weight), index))
         .filter(|(item, _, _)| item.weight <= max_weight)
         .collect::<Vec<_>>();
-    vec.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    vec.sort_unstable_by(|a, b| match b.1.cmp(&a.1) {
+        Ordering::Equal => b.0.weight.cmp(&a.0.weight),
+        other => other,
+    });
     vec.into_iter().fold(
         (
             Vec::with_capacity(len),
@@ -280,18 +367,53 @@ fn sort_by_cost_weight_ratio(
     )
 }
 
-// Calculates maximum possible cost ... takes sorted items by cost/weight ratios
-fn max_cost(items: &Vec<Item>, max_weight: u32) -> u32 {
-    use itertools::FoldWhile::{Continue, Done};
+// O(ln n)
+fn max_cost_from_rem(rem_costs: &[u32], rem_weights: &[u32], max_weight: u32) -> u32 {
+    let mut l = 0;
+    let mut r = rem_costs.len() - 2;
+    if rem_weights[0] <= max_weight {
+        return rem_costs[0];
+    }
+    // binary search
+    while l != r {
+        let next = (l + r) / 2;
+        let weight = rem_weights[0] - rem_weights[next + 1];
+        if weight <= max_weight {
+            l = next + 1;
+        } else {
+            r = next;
+        }
+    }
+    let rem_weight = (max_weight + rem_weights[l] - rem_weights[0]).min(rem_weights[0]);
+    let last_weight = rem_weights[l] - rem_weights[l + 1];
+    let last_cost = rem_costs[l] - rem_costs[l + 1];
+    let cost = rem_costs[0] - rem_costs[l]
+        + if rem_weight == 0 {
+            0
+        } else {
+            last_cost * last_weight / rem_weight
+        };
+    cost
+}
 
+// Calculates maximum possible cost ... takes sorted items by cost/weight ratios
+// O(n)
+fn max_cost(items: &[Item], max_weight: u32) -> u32 {
+    let mut i = 0;
+    use itertools::FoldWhile::{Continue, Done};
     #[allow(deprecated)] // fold_while no longer deprecated in master
     items
         .iter()
         .fold_while((0, 0), |(weight, cost), x| {
-            if weight + x.weight < max_weight {
+            if weight + x.weight <= max_weight {
+                i += 1;
                 Continue((weight + x.weight, cost + x.cost))
             } else {
-                Done((0, cost + x.cost * x.weight / (max_weight - weight)))
+                if weight == max_weight {
+                    Done((0, cost))
+                } else {
+                    Done((0, cost + x.cost * x.weight / (max_weight - weight)))
+                }
             }
         })
         .into_inner()
@@ -428,21 +550,33 @@ fn construction_pruning(problem: &Problem) -> Solution {
         weight: u32,
         index: usize,
         best_cost: u32,
+        last_selected: bool,
     ) -> u32 {
         if index < problem.p.items.len() {
-            if (problem.p.max_weight - weight) as f32 * problem.ratios[index] + (cost as f32)
-                    < best_cost as f32
+            let ratio = problem.ratios[index];
+            if (problem.p.max_weight - weight).min(problem.rem_weight[index])
+                * ratio.numer() / ratio.denom()
+                + cost
+                < best_cost
+                || cost + problem.rem_cost[index] < best_cost
+                // max_cost_from_rem is O(log n)
+                || best_cost > cost + max_cost_from_rem(&problem.rem_cost[index..], &problem.rem_weight[index..], problem.p.max_weight - weight)
             {
                 return best_cost;
             }
-            let new_weight = weight + problem.p.items[index].weight;
-            let best_with_item = if new_weight <= problem.p.max_weight {
+            let cur_item = problem.p.items[index];
+            let new_weight = weight + cur_item.weight;
+            let best_with_item = if new_weight <= problem.p.max_weight
+            //     v this condition prohibits from trying all permutations of same item
+                && (last_selected || problem.p.items[index - 1] != cur_item)
+            {
                 rec_fn(
                     problem,
-                    cost + problem.p.items[index].cost,
-                    weight + problem.p.items[index].weight,
+                    cost + cur_item.cost,
+                    weight + cur_item.weight,
                     index + 1,
                     best_cost,
+                    true,
                 )
             } else {
                 best_cost
@@ -453,6 +587,7 @@ fn construction_pruning(problem: &Problem) -> Solution {
                 weight,
                 index + 1,
                 best_cost.max(best_with_item),
+                false,
             );
             match best_cost.max(best_with_item).max(best_without_item) {
                 x if best_cost == x => best_cost, //best_cost didnt change, so it was not in this recursion (at best was same, which we ignore)
@@ -478,12 +613,14 @@ fn construction_pruning(problem: &Problem) -> Solution {
     let best_item = best_valued_item_fit(&items, std::u32::MAX);
 
     let mut aug_problem = ProblemWithRatios {
-        best_solution: (0..items.len()).map(|i| i==best_item.1).collect(),
+        rem_cost: calc_remaining_cost(&items),
+        rem_weight: calc_remaining_weight(&items),
+        best_solution: (0..items.len()).map(|i| i == best_item.1).collect(),
         p: Problem { items, ..*problem },
         ratios,
     };
 
-    let cost = rec_fn(&mut aug_problem, 0, 0, 0, best_item.0);
+    let cost = rec_fn(&mut aug_problem, 0, 0, 0, best_item.0, true);
 
     Solution {
         id: problem.id,
@@ -502,6 +639,8 @@ fn construction_pruning(problem: &Problem) -> Solution {
 }
 
 fn construction_dynamic_weight(problem: &Problem) -> Solution {
+    // backtracking only
+
     let (mut items, _ratios, mut mapping) =
         sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
 
@@ -512,8 +651,17 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
 
     let gcd = items
         .iter()
-        .fold(items[0].weight, |acc, x| acc.gcd(x.weight)) as usize;
-    let size = problem.max_weight as usize / gcd + 1;
+        .fold(items[0].weight, |acc, x| acc.gcd(x.weight));
+
+    if gcd > 1 {
+        for item in &mut items {
+            item.weight /= gcd;
+        }
+    }
+
+    let max_weight = problem.max_weight / gcd;
+
+    let size = (problem.max_weight / gcd) as usize + 1;
     let ilen = items.len();
 
     let mut table_raw: Vec<Option<(u32, bool)>> = vec![None; size * (ilen + 1)];
@@ -523,7 +671,7 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
         .collect::<Vec<_>>();
 
     //tabulka je převrácená oproti přednáškám .. řešení je v [0][0]
-    //první index určuje přidané předměty .. např 0 => jsou přidané věci 0..ilen
+    //první index určuje přidané předměty .. např i => jsou přidané věci i..ilen
     //druhý index určuje zbývající kapacitu a nevyužitá kapacita je "nahoře"
 
     let table = table_base.as_mut_slice();
@@ -543,15 +691,15 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
         let with_item = (item + 1, weight + items[*item].weight);
         let without_item = (item + 1, *weight);
         let mut me_cell = None;
-        if with_item.1 <= problem.max_weight {
-            if let Some(cell) = table[with_item.0][with_item.1 as usize / gcd] {
+        if with_item.1 <= max_weight {
+            if let Some(cell) = table[with_item.0][with_item.1 as usize] {
                 me_cell = Some((cell.0 + items[*item].cost, true));
             } else {
                 stack.push(with_item);
                 continue;
             }
         }
-        if let Some(cell) = table[without_item.0][without_item.1 as usize / gcd] {
+        if let Some(cell) = table[without_item.0][without_item.1 as usize] {
             let cost_with_item = me_cell.map(|x| x.0).unwrap_or(0);
             if cell.0 >= cost_with_item {
                 me_cell = Some((cell.0, false));
@@ -560,7 +708,7 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
             stack.push(without_item);
             continue;
         }
-        table[*item][*weight as usize / gcd] = me_cell;
+        table[*item][*weight as usize] = me_cell;
         stack.pop();
     }
     Solution {
@@ -574,7 +722,7 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
                 .fold(
                     (0, 0u32, vec![false; problem.items.len()]),
                     |(i, w, mut vec), x| {
-                        let added = x[w as usize / gcd].unwrap().1;
+                        let added = x[w as usize].unwrap().1;
                         vec[mapping[i]] = added;
                         (i + 1, if added { w + items[i].weight } else { w }, vec)
                     },
@@ -585,35 +733,47 @@ fn construction_dynamic_weight(problem: &Problem) -> Solution {
 }
 
 fn construction_dynamic_cost(problem: &Problem) -> Solution {
-    let (mut items, mut ratios, mut mapping) =
+    // mainly foward tracking but backtracing solution
+    let (mut items, mut ratios, mut mappings) =
         sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
-    ratios.push(0.0);
+    ratios.push(ratio::new(0,1));
 
     if items.len() == 0 {
         items.push(Item {
             weight: std::u32::MAX,
             cost: 0,
         });
-        mapping.push(0);
+        mappings.push(0);
     }
 
-    let gcd = items.iter().fold(items[0].cost, |acc, x| acc.gcd(x.cost)) as usize;
+    let cost_gcd = items.iter().fold(items[0].cost, |acc, x| acc.gcd(x.cost));
+    let weight_gcd = items
+        .iter()
+        .fold(items[0].weight, |acc, x| acc.gcd(x.weight));
+    let max_weight = (problem.max_weight - problem.max_weight % weight_gcd).max(1);
     let ilen = items.len();
 
-    // if we take first k items and part of the first item, which do not fit, we get maximal possible cost
-    #[allow(deprecated)] // fold_while is not anymore deprecated in master
-    let max_cost = max_cost(&items, problem.max_weight);
+    if cost_gcd > 1 {
+        for item in &mut items {
+            item.cost /= cost_gcd;
+        }
 
-    let size = max_cost as usize / gcd.max(1) + 1;
+        for ratio in &mut ratios {
+            *ratio /= cost_gcd;
+        }
+    }
+
+    // if we take first k items and part of the first item, which do not fit, we get maximal possible cost
+    let max_cost = max_cost(&items, max_weight);
+
+    let size = max_cost as usize + 1;
 
     if max_cost == 0 {
         return Solution::empty(problem.id, problem.size);
     }
 
-    if size * (ilen + 1) * size_of::<Option<u32>>() > 8_000_000_000 {
-        println!("Needed allocations are over 8 GB!");
-        return Solution::none(problem.id, problem.size);
-    }
+    let rem_cost = calc_remaining_cost(&items);
+    let rem_weight = calc_remaining_weight(&items);
 
     let mut table_raw: Vec<Option<u32>> = vec![None; size * (ilen + 1)];
     let mut table_base = table_raw
@@ -637,7 +797,17 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
     queue.push_back((0, 0));
 
     // best_cost je nejlepší cena dosáhnuta za 0..(index aktuálního předmětu)
-    let mut best_cost = construction_redux(problem).cost;
+    let redux_solution = {
+        let (solution, cost) =
+            construction_greedy_inner(&items, &mappings, problem.size, problem.max_weight);
+        let (item_cost, index) = best_valued_item_fit(&problem.items, problem.max_weight);
+        if cost > item_cost {
+            (solution, cost)
+        } else {
+            ((0..problem.size).map(|i| i == index).collect(), item_cost)
+        }
+    };
+    let mut best_cost = redux_solution.1 / cost_gcd;
 
     while !queue.is_empty() {
         let (item, cost) = queue.pop_front().unwrap();
@@ -646,92 +816,92 @@ fn construction_dynamic_cost(problem: &Problem) -> Solution {
         }
         let with_item = (item + 1, cost + items[item].cost);
         let without_item = (item + 1, cost);
-        let weight = table[item][cost as usize / gcd].unwrap();
+        let weight = table[item][cost as usize].unwrap();
         let new_weight = weight + items[item].weight;
-        if new_weight <= problem.max_weight {
+        if new_weight <= max_weight {
             best_cost = best_cost.max(with_item.1);
-            if let Some(value) = table[with_item.0][with_item.1 as usize / gcd] {
+            if let Some(value) = table[with_item.0][with_item.1 as usize] {
                 if value > new_weight {
-                    table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
+                    table[with_item.0][with_item.1 as usize] = Some(new_weight);
                     // it is already in queue, no need to push again
                 }
             } else {
-                table[with_item.0][with_item.1 as usize / gcd] = Some(new_weight);
+                table[with_item.0][with_item.1 as usize] = Some(new_weight);
                 queue.push_back(with_item);
             }
         }
 
         // pruning same as in recursive pruning
-        if (problem.max_weight - weight) as f32 * ratios[without_item.0] + (cost as f32)
-                < best_cost as f32
+        let ratio = ratios[without_item.0];
+        if (max_weight - weight).min(rem_weight[without_item.0]) * ratio.numer() / ratio.denom()
+            + cost
+            < best_cost
+            || cost + rem_cost[without_item.0] < best_cost
         {
             continue;
         }
 
-        if let Some(value) = table[without_item.0][without_item.1 as usize / gcd] {
+        if let Some(value) = table[without_item.0][without_item.1 as usize] {
             if value > weight {
-                table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
+                table[without_item.0][without_item.1 as usize] = Some(weight);
                 // it is already in queue, no need to push again
             }
         } else {
-            table[without_item.0][without_item.1 as usize / gcd] = Some(weight);
+            table[without_item.0][without_item.1 as usize] = Some(weight);
             queue.push_back(without_item);
         }
     }
 
-    let best_cost = (table
-        .last()
-        .unwrap()
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, x)| x.is_some())
-        .unwrap()
-        .0
-        * gcd) as u32;
-
-    let best_solution = table
-        .iter()
-        .rev()
-        .skip(1)
-        .fold(
-            (
-                ilen - 1,
-                best_cost,
-                problem.max_weight,
-                vec![false; problem.items.len()],
-            ),
-            |(i, rem_cost, rem_weight, mut vec), x| {
-                let (new_cost, rem_weight) = if let Some(w) = x[rem_cost as usize / gcd] {
-                    if w <= rem_weight {
-                        (rem_cost, w)
+    let best_solution = if best_cost * cost_gcd == redux_solution.1 {
+        redux_solution.0
+    } else {
+        table
+            .iter()
+            .rev()
+            .skip(1)
+            .fold(
+                (
+                    ilen - 1,
+                    best_cost,
+                    problem.max_weight,
+                    vec![false; problem.items.len()],
+                ),
+                |(i, rem_cost, rem_weight, mut vec), x| {
+                    let (new_cost, rem_weight) = if let Some(w) = x[rem_cost as usize] {
+                        if w <= rem_weight {
+                            (rem_cost, w)
+                        } else {
+                            vec[mappings[i]] = true;
+                            let rem_cost = rem_cost - items[i].cost;
+                            (rem_cost, x[rem_cost as usize].unwrap())
+                        }
                     } else {
-                        vec[mapping[i]] = true;
+                        vec[mappings[i]] = true;
                         let rem_cost = rem_cost - items[i].cost;
-                        (rem_cost, x[rem_cost as usize / gcd].unwrap())
-                    }
-                } else {
-                    vec[mapping[i]] = true;
-                    let rem_cost = rem_cost - items[i].cost;
-                    (rem_cost, x[rem_cost as usize / gcd].unwrap())
-                };
-                (i - 1, new_cost, rem_weight, vec)
-            },
-        )
-        .3;
+                        (rem_cost, x[rem_cost as usize].unwrap())
+                    };
+                    (i.max(1) - 1, new_cost, rem_weight, vec)
+                },
+            )
+            .3
+    };
 
     Solution {
         id: problem.id,
         size: problem.size,
-        cost: best_cost,
+        cost: best_cost * cost_gcd,
         items: Some(best_solution),
     }
 }
 
-fn construction_greedy(problem: &Problem) -> Solution {
-    let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+fn construction_greedy_inner(
+    items: &Vec<Item>,
+    mappings: &Vec<usize>,
+    size: usize,
+    max_weight: u32,
+) -> (Vec<bool>, u32) {
     let (items, _, cost) = items.iter().enumerate().fold(
-        (vec![false; problem.items.len()], problem.max_weight, 0),
+        (vec![false; size], max_weight, 0),
         |(mut items, rem_weight, cost), (i, item)| {
             if rem_weight >= item.weight {
                 items[mappings[i]] = true;
@@ -741,6 +911,13 @@ fn construction_greedy(problem: &Problem) -> Solution {
             }
         },
     );
+    (items, cost)
+}
+
+fn construction_greedy(problem: &Problem) -> Solution {
+    let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+    let (items, cost) =
+        construction_greedy_inner(&items, &mappings, problem.size, problem.max_weight);
     Solution {
         id: problem.id,
         size: problem.size,
@@ -751,15 +928,15 @@ fn construction_greedy(problem: &Problem) -> Solution {
 
 fn best_valued_item_fit(items: &Vec<Item>, max_weight: u32) -> (u32, usize) {
     items
-    .iter()
-    .enumerate()
-    .fold((0, 0), |(cost, index), (i, item)| {
-        if item.cost > cost && item.weight <= max_weight {
-            (item.cost, i)
-        } else {
-            (cost, index)
-        }
-    })
+        .iter()
+        .enumerate()
+        .fold((0, 0), |(cost, index), (i, item)| {
+            if item.cost > cost && item.weight <= max_weight {
+                (item.cost, i)
+            } else {
+                (cost, index)
+            }
+        })
 }
 
 fn construction_redux(problem: &Problem) -> Solution {
@@ -778,5 +955,36 @@ fn construction_redux(problem: &Problem) -> Solution {
         }
     } else {
         greedy
+    }
+}
+
+fn construction_ftpas(problem: &Problem, forced_gcd: u32) -> Solution {
+    let transformed_items = problem
+        .items
+        .iter()
+        .map(|&item| Item {
+            cost: item.cost / forced_gcd,
+            ..item
+        })
+        .collect();
+
+    let solution = construction_dynamic_cost(&Problem {
+        items: transformed_items,
+        ..*problem
+    });
+
+    Solution {
+        cost: if let Some(ref items) = solution.items {
+            items.iter().enumerate().fold(0, |acc, (i, &used)| {
+                if used {
+                    acc + problem.items[i].cost
+                } else {
+                    acc
+                }
+            })
+        } else {
+            0
+        },
+        ..solution
     }
 }
