@@ -9,16 +9,10 @@ structopt = "0.3"
 itertools = "0.9"
 lazy_format = "1.8"
 gcd = "2.0"
-<<<<<<< HEAD
 num-rational = "0.3"
-
-[profile.release]
-lto="thin"
-opt-level = 3
-=======
 derive_more = "0.99"
+enum_dispatch = "0.3"
 
 [profile.release]
 lto="thin"
 opt-level = 3
->>>>>>> master
