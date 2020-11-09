@@ -9,31 +9,27 @@ use std::fs;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+use derive_more::Display;
+use structopt::clap::{Error};
+
 use gcd::Gcd;
 
 use num_rational::Ratio;
 
 type ratio = Ratio<u32>;
 
-fn main() {
+fn main() -> Result<(), Error>  {
     let opts = Opts::from_args();
 
     let solver = Solver::from_opts(&opts);
 
-    let input =
-        fs::read_to_string(opts.input_task.clone()).expect("Failed to read input_task file!");
+    let input = &opts.input_task;
 
     let ref_solutions = if let Some(ref sol) = opts.solution {
-        Some(
-            fs::read_to_string(sol)
-                .expect("Failed to read reference soulions file!")
-                .lines()
-                .map(parse_solution_line)
-                .fold(HashMap::new(), |mut map, value| {
-                    map.insert(value.id, value);
-                    map
-                }),
-        )
+        Some(sol.0.iter().fold(HashMap::new(), |mut map, value| {
+            map.insert(value.id, value);
+            map
+        }))
     } else {
         None
     };
@@ -41,8 +37,8 @@ fn main() {
     let mut time = Duration::new(0, 0);
 
     let durations = input
-        .lines()
-        .map(parse_problem_line)
+        .0
+        .iter()
         .map(|problem| {
             let start = Instant::now();
             (
@@ -82,13 +78,13 @@ fn main() {
             if ref_solutions.is_some() && (problem.min_cost.is_none() || opts.force_construction) {
                 let reference = ref_solutions.as_ref().unwrap().get(&solution.id).unwrap();
                 if is_exact {
-                    if *reference != solution
+                    if **reference != solution
                         && reference.cost == solution.cost
                         && reference.size == solution.size
                     {
                         println!("Same cost, but different solution!");
                     } else {
-                        assert_eq!(*reference, solution);
+                        assert_eq!(**reference, solution);
                     }
                 } else {
                     let absolute_error = reference.cost - solution.cost;
@@ -150,6 +146,7 @@ fn main() {
     println!("Total time: {:?}", time);
 
     println!("{} {}", max_time.as_secs_f64(), avg_time.as_secs_f64())
+    Ok(())
 }
 
 fn calc_remaining_weight(items: &[Item]) -> Vec<u32> {
@@ -229,24 +226,76 @@ impl Solver {
     }
 }
 
+#[derive(Display, Debug)]
+#[display(fmt="{}", self.0)]
+struct DisplayError(String);
+
+#[derive(Debug)]
+struct SolutionsFromFile(Vec<Solution>);
+
+impl FromStr for SolutionsFromFile {
+    type Err = DisplayError;
+    fn from_str(file_name: &str) -> Result<SolutionsFromFile, DisplayError> {
+        Ok(SolutionsFromFile(
+            fs::read_to_string(file_name)
+                .map_err(|e| {
+                    DisplayError(format!(
+                        "Could not solution load file: {}, because: {}",
+                        file_name, e
+                    ))
+                })?
+                .lines()
+                .map(|line| {
+                    parse_solution_line(line).map_err(|e| format!("{}\nSolution Line: {}", e, line))
+                })
+                .collect::<Result<_, _>>()
+                .map_err(|s| DisplayError(s))?,
+        ))
+    }
+}
+
+#[derive(Debug)]
+struct ProblemFromfile(Vec<Problem>);
+
+impl FromStr for ProblemFromfile {
+    type Err = DisplayError;
+    fn from_str(file_name: &str) -> Result<ProblemFromfile, DisplayError> {
+        Ok(ProblemFromfile(
+            fs::read_to_string(file_name)
+                .map_err(|e| {
+                    DisplayError(format!(
+                        "Could not problem load file: {}, because: {}",
+                        file_name, e
+                    ))
+                })?
+                .lines()
+                .map(|line| {
+                    parse_problem_line(line).map_err(|e| format!("{}\nProblem Line: {}", e, line))
+                })
+                .collect::<Result<_, _>>()
+                .map_err(|s| DisplayError(s))?,
+        ))
+    }
+}
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "knapsack", author = "Martin Quarda <martin@quarda.cz>")]
 struct Opts {
-    input_task: String,
-    solution: Option<String>,
-    #[structopt(short, long)]
+    input_task: ProblemFromfile,
+    solution: Option<SolutionsFromFile>,
+    #[structopt(long)]
     naive: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     pruning: bool,
     #[structopt(long)]
     dynamic_weight: bool,
     #[structopt(long)]
     dynamic_cost: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     greedy: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     redux: bool,
-    #[structopt(short, long)]
+    #[structopt(long)]
     ftpas: Option<u32>,
     #[structopt(long)]
     save_durations: Option<String>,
@@ -303,15 +352,30 @@ impl Solution {
             items: Some(vec![false; size]),
         }
     }
+}
 
-    fn none(id: u32, size: usize) -> Solution {
-        Solution {
-            id,
-            size,
-            cost: 0,
-            items: None,
-        }
-    }
+fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
+    use itertools::FoldWhile::{Continue, Done};
+    let mut items = problem.items.clone();
+    items.sort_by(|a, b| a.weight.cmp(&b.weight));
+    #[allow(deprecated)]
+    let m = items
+        .iter()
+        .fold_while((0, 0), |(weight, i), item| {
+            if weight + item.weight <= problem.max_weight {
+                Continue((weight + item.weight, i + 1))
+            } else {
+                Done((0, i))
+            }
+        })
+        .into_inner()
+        .1;
+    let mut gcds = items
+        .into_iter()
+        .map(|item| item.cost % gcd)
+        .collect::<Vec<_>>();
+    gcds.sort_unstable_by(|a, b| b.cmp(a));
+    gcds[0..m].iter().sum()
 }
 
 fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
@@ -420,70 +484,81 @@ fn max_cost(items: &[Item], max_weight: u32) -> u32 {
         .1
 }
 
-fn next_parse<'a, T, K>(iter: &mut T) -> K
+fn next_parse_with_err<'a, T, K>(iter: &mut T) -> Result<K, String>
 where
     T: Iterator<Item = &'a str>,
     K: FromStr,
     <K as std::str::FromStr>::Err: std::fmt::Debug,
 {
-    iter.next().unwrap().parse().unwrap()
+    Ok(iter
+        .next()
+        .ok_or_else(|| format!("Line exhasted, but next item was expecting"))?
+        .parse()
+        .map_err(|e| format!("Could not parse number {:?}", e))?)
 }
 
-fn parse_problem_line(line: &str) -> Problem {
+fn parse_problem_line(line: &str) -> Result<Problem, String> {
     let mut iter = line.split(' ').filter(|x| !x.is_empty());
-    let id: i32 = next_parse(&mut iter);
-    let size = next_parse(&mut iter);
-    let max_weight = next_parse(&mut iter);
+    let id: i32 = next_parse_with_err(&mut iter)?;
+    let size = next_parse_with_err(&mut iter)?;
+    let max_weight = next_parse_with_err(&mut iter)?;
     let min_cost = match () {
-        () if id < 0 => Some(next_parse(&mut iter)),
-        () if id > 0 => None,
-        _ => panic!("zero id not permitted"),
-    };
+        () if id < 0 => Ok(Some(next_parse_with_err(&mut iter)?)),
+        () if id > 0 => Ok(None),
+        _ => Err(format!("zero id not permitted")),
+    }?;
     let items = (0..size)
-        .map(|_| Item {
-            weight: next_parse(&mut iter),
-            cost: next_parse(&mut iter),
+        .map(|_|{
+            let weight =  next_parse_with_err(&mut iter)?;
+            let cost =  next_parse_with_err(&mut iter)?;
+            Ok(Item {
+                weight,
+                cost
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, String>>()?;
     assert_eq!(
         iter.next(),
         None,
         "Line was not exhausted, wrong problem line!"
     );
-    Problem {
+    Ok(Problem {
         id: id.abs() as u32,
         max_weight,
         size,
         min_cost,
         items,
-    }
+    })
 }
 
-fn parse_solution_line(line: &str) -> Solution {
+fn parse_solution_line(line: &str) -> Result<Solution, String> {
     let mut iter = line.split(' ').filter(|x| !x.is_empty());
-    let id = next_parse(&mut iter);
-    let size = next_parse(&mut iter);
-    let cost = next_parse(&mut iter);
+    let id = next_parse_with_err(&mut iter)?;
+    let size = next_parse_with_err(&mut iter)?;
+    let cost = next_parse_with_err(&mut iter)?;
     let items = Some(
         (0..size)
-            .map(|_| match iter.next().unwrap() {
-                "1" => true,
-                "0" => false,
-                _ => panic!("Reference solution is not in (0, 1)!"),
+            .map(|_| {
+                match iter
+                    .next()
+                    .ok_or_else(|| format!("Not enough bits in line!"))?
+                {
+                    "1" => Ok(true),
+                    "0" => Ok(false),
+                    _ => Err(format!("Reference solution is not in (0, 1)!")),
+                }
             })
-            .collect::<Vec<_>>(),
+            .collect::<Result<Vec<_>, String>>()?,
     );
-    assert_eq!(
-        iter.next(),
-        None,
-        "Line was not exhausted, wrong solution line!"
-    );
-    Solution {
+    if iter.next() != None {
+        return Err(format!("Line was not exhausted, wrong solution line!"));
+    }
+    Ok(Solution {
         id,
         size,
         cost,
         items,
-    }
+    })
 }
 
 fn construction_naive(problem: &Problem) -> Solution {
