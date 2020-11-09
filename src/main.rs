@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use derive_more::Display;
-use structopt::clap::{Error, ErrorKind};
+use structopt::clap::{Error};
 
 use gcd::Gcd;
 
@@ -201,7 +201,10 @@ impl FromStr for SolutionsFromFile {
         Ok(SolutionsFromFile(
             fs::read_to_string(file_name)
                 .map_err(|e| {
-                    DisplayError(String::from_str("Could not load solution file!").unwrap())
+                    DisplayError(format!(
+                        "Could not solution load file: {}, because: {}",
+                        file_name, e
+                    ))
                 })?
                 .lines()
                 .map(|line| {
@@ -222,7 +225,10 @@ impl FromStr for ProblemFromfile {
         Ok(ProblemFromfile(
             fs::read_to_string(file_name)
                 .map_err(|e| {
-                    DisplayError(String::from_str("Could not load problem file!").unwrap())
+                    DisplayError(format!(
+                        "Could not problem load file: {}, because: {}",
+                        file_name, e
+                    ))
                 })?
                 .lines()
                 .map(|line| {
@@ -306,15 +312,6 @@ impl Solution {
             items: Some(vec![false; size]),
         }
     }
-
-    fn none(id: u32, size: usize) -> Solution {
-        Solution {
-            id,
-            size,
-            cost: 0,
-            items: None,
-        }
-    }
 }
 
 fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
@@ -387,15 +384,6 @@ fn max_cost(items: &Vec<Item>, max_weight: u32) -> u32 {
         .1
 }
 
-fn next_parse<'a, T, K>(iter: &mut T) -> K
-where
-    T: Iterator<Item = &'a str>,
-    K: FromStr,
-    <K as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    iter.next().unwrap().parse().unwrap()
-}
-
 fn next_parse_with_err<'a, T, K>(iter: &mut T) -> Result<K, String>
 where
     T: Iterator<Item = &'a str>,
@@ -420,11 +408,15 @@ fn parse_problem_line(line: &str) -> Result<Problem, String> {
         _ => Err(format!("zero id not permitted")),
     }?;
     let items = (0..size)
-        .map(|_| Item {
-            weight: next_parse(&mut iter),
-            cost: next_parse(&mut iter),
+        .map(|_|{
+            let weight =  next_parse_with_err(&mut iter)?;
+            let cost =  next_parse_with_err(&mut iter)?;
+            Ok(Item {
+                weight,
+                cost
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, String>>()?;
     assert_eq!(
         iter.next(),
         None,
@@ -453,13 +445,13 @@ fn parse_solution_line(line: &str) -> Result<Solution, String> {
                 {
                     "1" => Ok(true),
                     "0" => Ok(false),
-                    _ => Err(String::from_str("Reference solution is not in (0, 1)!").unwrap()),
+                    _ => Err(format!("Reference solution is not in (0, 1)!")),
                 }
             })
             .collect::<Result<Vec<_>, String>>()?,
     );
     if iter.next() != None {
-        return Err(String::from_str("Line was not exhausted, wrong solution line!").unwrap());
+        return Err(format!("Line was not exhausted, wrong solution line!"));
     }
     Ok(Solution {
         id,
