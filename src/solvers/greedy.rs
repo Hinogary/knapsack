@@ -18,8 +18,8 @@ impl SolverTrait for GreedySolver {
 }
 
 pub fn construction_greedy_inner(
-    items: &Vec<Item>,
-    mappings: &Vec<usize>,
+    items: &[Item],
+    mappings: &[usize],
     size: usize,
     max_weight: u32,
 ) -> (Vec<bool>, u32) {

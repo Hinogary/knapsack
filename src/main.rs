@@ -10,7 +10,7 @@ use std::fs;
 use std::time::{Duration, Instant};
 
 use derive_more::Display;
-use structopt::clap::Error;
+use structopt::clap::{Error, ErrorKind};
 
 mod ioutils;
 mod solvers;
@@ -20,7 +20,8 @@ use solvers::{utils::calculate_practical_ftpas_error, *};
 fn main() -> Result<(), Error> {
     let opts = Opts::from_args();
 
-    let solver = Solver::from_opts(&opts);
+    let solver = Solver::from_opts(&opts)
+        .map_err(|e| Error::with_description(&e.0, ErrorKind::ArgumentConflict))?;
 
     let input = &opts.input_task;
 

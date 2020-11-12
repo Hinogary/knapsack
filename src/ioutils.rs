@@ -21,7 +21,7 @@ impl FromStr for SolutionsFromFile {
                     parse_solution_line(line).map_err(|e| format!("{}\nSolution Line: {}", e, line))
                 })
                 .collect::<Result<_, _>>()
-                .map_err(|s| DisplayError(s))?,
+                .map_err(DisplayError)?,
         ))
     }
 }
@@ -45,7 +45,7 @@ impl FromStr for ProblemFromfile {
                     parse_problem_line(line).map_err(|e| format!("{}\nProblem Line: {}", e, line))
                 })
                 .collect::<Result<_, _>>()
-                .map_err(|s| DisplayError(s))?,
+                .map_err(DisplayError)?,
         ))
     }
 }
@@ -58,7 +58,7 @@ where
 {
     Ok(iter
         .next()
-        .ok_or_else(|| format!("Line exhasted, but next item was expecting"))?
+        .ok_or_else(|| "Line exhasted, but next item was expecting".to_string())?
         .parse()
         .map_err(|e| format!("Could not parse number {:?}", e))?)
 }
@@ -71,7 +71,7 @@ pub fn parse_problem_line(line: &str) -> Result<Problem, String> {
     let min_cost = match () {
         () if id < 0 => Ok(Some(next_parse_with_err(&mut iter)?)),
         () if id > 0 => Ok(None),
-        _ => Err(format!("zero id not permitted")),
+        _ => Err("zero id not permitted".to_string()),
     }?;
     let items = (0..size)
         .map(|_| {
@@ -104,17 +104,17 @@ pub fn parse_solution_line(line: &str) -> Result<Solution, String> {
             .map(|_| {
                 match iter
                     .next()
-                    .ok_or_else(|| format!("Not enough bits in line!"))?
+                    .ok_or_else(|| "Not enough bits in line!".to_string())?
                 {
                     "1" => Ok(true),
                     "0" => Ok(false),
-                    _ => Err(format!("Reference solution is not in (0, 1)!")),
+                    _ => Err("Reference solution is not in (0, 1)!".to_string()),
                 }
             })
             .collect::<Result<Vec<_>, String>>()?,
     );
     if iter.next() != None {
-        return Err(format!("Line was not exhausted, wrong solution line!"));
+        return Err("Line was not exhausted, wrong solution line!".to_string());
     }
     Ok(Solution {
         id,

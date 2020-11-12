@@ -20,7 +20,7 @@ impl SolverTrait for DynamicCostSolver {
             sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
         ratios.push(ratio::new(0, 1));
 
-        if items.len() == 0 {
+        if items.is_empty() {
             items.push(Item {
                 weight: std::u32::MAX,
                 cost: 0,

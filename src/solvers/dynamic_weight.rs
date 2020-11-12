@@ -10,7 +10,7 @@ impl SolverTrait for DynamicWeightSolver {
         let (mut items, _ratios, mut mapping) =
             sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
 
-        if items.len() == 0 {
+        if items.is_empty() {
             items.push(Item { weight: 1, cost: 0 });
             mapping.push(0);
         }

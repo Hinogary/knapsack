@@ -46,12 +46,10 @@ impl SolverTrait for NaiveSolver {
                     }
                     _ => unreachable!(),
                 }
+            } else if weight <= problem.p.max_weight {
+                best_cost.max(cost)
             } else {
-                if weight <= problem.p.max_weight {
-                    best_cost.max(cost)
-                } else {
-                    best_cost
-                }
+                best_cost
             }
         }
 
