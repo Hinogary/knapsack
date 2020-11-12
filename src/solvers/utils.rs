@@ -1,14 +1,15 @@
 use super::{ratio, Item, Problem};
 use itertools::Itertools;
 use std::cmp::Reverse;
+use unzip3::Unzip3;
 
 pub fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
     use itertools::FoldWhile::{Continue, Done};
-    let mut items = problem.items.clone();
-    items.sort_by_key(|x| x.weight);
-    #[allow(deprecated)]
-    let m = items
+    #[allow(deprecated)] // fold_while no longer deprecated in master
+    let m = problem
+        .items
         .iter()
+        .sorted_by_key(|x| x.weight)
         .fold_while((0, 0), |(weight, i), item| {
             if weight + item.weight <= problem.max_weight {
                 Continue((weight + item.weight, i + 1))
@@ -18,11 +19,13 @@ pub fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
         })
         .into_inner()
         .1;
-    let mut gcds = items
-        .into_iter()
+    let gcds = problem
+        .items
+        .iter()
+        .filter(|item| item.weight <= problem.max_weight)
         .map(|item| item.cost % gcd)
+        .sorted_by_key(|&x| Reverse(x))
         .collect::<Vec<_>>();
-    gcds.sort_unstable_by_key(|&x| Reverse(x));
     gcds[0..m].iter().sum()
 }
 
@@ -31,7 +34,6 @@ pub fn sort_by_cost_weight_ratio(
     items: &[Item],
     max_weight: u32,
 ) -> (Vec<Item>, Vec<ratio>, Vec<usize>) {
-    let len = items.len();
     let mut vec = items
         .iter()
         .enumerate()
@@ -39,19 +41,7 @@ pub fn sort_by_cost_weight_ratio(
         .filter(|(item, _, _)| item.weight <= max_weight)
         .collect::<Vec<_>>();
     vec.sort_unstable_by_key(|x| Reverse((x.1, x.0.weight)));
-    vec.into_iter().fold(
-        (
-            Vec::with_capacity(len),
-            Vec::with_capacity(len),
-            Vec::with_capacity(len),
-        ),
-        |(mut items, mut ratios, mut mappings), (item, ratio, mapping)| {
-            items.push(item);
-            ratios.push(ratio);
-            mappings.push(mapping);
-            (items, ratios, mappings)
-        },
-    )
+    vec.into_iter().unzip3()
 }
 
 // O(ln n)
