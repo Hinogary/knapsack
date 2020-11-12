@@ -104,36 +104,34 @@ pub fn best_valued_item_fit(items: &[Item], max_weight: u32) -> (u32, usize) {
         })
 }
 
-pub fn calc_remaining_weight(items: &[Item]) -> Vec<u32> {
-    //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
-    items
-        .iter()
+/// final result is k[i] = f(ts)[i..x.len()].sum() in O(n) time with 2 allocations
+fn desc_sum_vec_with_fn<T, K, F>(ts: &[T], f: F) -> Vec<K>
+where
+    F: Fn(&T) -> K,
+    K: std::ops::AddAssign<K>,
+    K: Clone,
+    K: Default,
+{
+    // reverse ts, then accumule them into vector, where x[i] = x[i-1] + f(t), (x[-1] = 0), then again reverse
+
+    ts.iter()
         .rev()
-        .map(|item| item.weight)
-        .scan(0, |state, x| {
+        .map(f)
+        .scan(K::default(), |state, x| {
             *state += x;
-            Some(*state)
+            Some(state.clone())
         })
         .collect::<Vec<_>>()
         .into_iter()
         .rev()
-        .chain([0u32].iter().cloned())
+        .chain([K::default()].iter().cloned())
         .collect()
 }
 
+pub fn calc_remaining_weight(items: &[Item]) -> Vec<u32> {
+    desc_sum_vec_with_fn(items, |item| item.weight)
+}
+
 pub fn calc_remaining_cost(items: &[Item]) -> Vec<u32> {
-    //reverse items[..].cost, then accumule them into vector, where x[i] = x[i-1] + items[i].cost (x[-1] = 0), then again reverse
-    items
-        .iter()
-        .rev()
-        .map(|item| item.cost)
-        .scan(0, |state, x| {
-            *state += x;
-            Some(*state)
-        })
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .chain([0u32].iter().cloned())
-        .collect()
+    desc_sum_vec_with_fn(items, |item| item.cost)
 }
