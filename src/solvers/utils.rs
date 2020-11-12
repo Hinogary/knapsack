@@ -34,14 +34,13 @@ pub fn sort_by_cost_weight_ratio(
     items: &[Item],
     max_weight: u32,
 ) -> (Vec<Item>, Vec<ratio>, Vec<usize>) {
-    let mut vec = items
+    items
         .iter()
         .enumerate()
         .map(|(index, item)| (*item, ratio::new(item.cost, item.weight), index))
         .filter(|(item, _, _)| item.weight <= max_weight)
-        .collect::<Vec<_>>();
-    vec.sort_unstable_by_key(|x| Reverse((x.1, x.0.weight)));
-    vec.into_iter().unzip3()
+        .sorted_by_key(|x| Reverse((x.1, x.0.weight)))
+        .unzip3()
 }
 
 // O(ln n)
