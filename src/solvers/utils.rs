@@ -113,7 +113,6 @@ where
     K: Default,
 {
     // reverse ts, then accumule them into vector, where x[i] = x[i-1] + f(t), (x[-1] = 0), then again reverse
-
     ts.iter()
         .rev()
         .map(f)

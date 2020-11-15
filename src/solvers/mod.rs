@@ -50,6 +50,15 @@ pub use Solver::*;
 #[enum_dispatch(Solver)]
 pub trait SolverTrait {
     fn construction(&self, problem: &Problem) -> Solution;
+    // method can specialize better decision
+    fn decision(&self, problem: &Problem) -> Solution {
+        let constr_sol = self.construction(problem);
+        if constr_sol.cost >= problem.min_cost.unwrap() {
+            constr_sol
+        } else {
+            Solution::none(problem.id, problem.size)
+        }
+    }
 }
 
 impl Solver {

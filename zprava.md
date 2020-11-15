@@ -6,7 +6,7 @@ Problém batohu
 Definice problému
 -----------------
 
-Je daná množina předmětů s váhou a cenou. Úkolem je najít takovou podmnožinu, aby součet váh byl do maximální povolené váhy a zároveň celková cena podmnožiny byla alespoň taková, jaká je zadaná na vstupu (rozhodovací problém).
+Je daná množina předmětů s váhou a cenou. Úkolem je najít takovou podmnožinu, aby součet váh byl do maximální povolené váhy a zároveň celková cena podmnožiny byla maximální (konstrukční problém).
 
 Implementace
 ------------
@@ -42,134 +42,100 @@ Maximum time: 1.420254ms Average time: 11.261µs
 Total time: 5.630666ms
 ```
 
-Naivní algoritmus
------------------
+Barvy v grafu
+-------------
 
-Naivní algoritmus hloupě prohledává všechny konstrukce rekurzivním sestupem, pocestě si akorát průběžně počítá váhu a cenu.
+<span style="color:red">Červená</span> je naivní, <span style="color:purple">fialová</span> prořezávání, <span style="color:blue">modrá</span> rozklad podle váhy a <span style="color:green">zelená</span> rozklad podle ceny. <span style="text-decoration: underline">Plná čára je průměr</span> a <span style="text-decoration:underline dotted">přerušovaná maximum</span>. Na grafech je čas v logaritmickém měřítku.
 
-Prořezávací algoritmus
-----------------------
+Vylepšení
+---------
 
-Prořezávací algoritmus používá také rekurzivní sestup, ale je v něm několik optimalizací.
-
-Předměty se seřadí podle poměru `cost / weight` sestupně, takže se první zkouší do batohu dát ty předměty s lepším poměrem a zároveň u toho se vyfiltrují příliš těžké předměty. (optimalizace filtrace a řazení)
-
-Také se bere v úvahu zbývajicí kapacita a když poměr `cost / weight` aktuálního předmětu vynásobená zbývajicí kapacitou nepřekoná nejlepší výsledek, tak se vrátím. Tady se předpokládá, že nejhorší scénář je, že všechny další předměty budou mít stejný `cost / weight` a tím approximuju maximální cenu, kterou můžou dát při zbývajicí kapacitě. (Optimalizace cost/weight ratia)
-
-Počátek nainicializuju tak, že nazačátku nastavím největší item jako řešení a první navštívená konfigurace je konfigurace greedy řešení. Při $1.$ navštívené konfiguraci mám jistotu, že mám řešení alespoň $50%$ maxima možného. Tímpádem mám jistotu, že dokážu celkem efektivně ořezávat, když to je možné.
-
-Dynamický programování - rozklad podle váh
-------------------------------------------
-
-Algoritmus je realizován tabulkou a obsahuje pouze optimilizaci filtrace a řazení. Tabulka má indexy `table[item][weight]`. Hodnota v tabulce má význam, že když vemu itemy $[item, len)$, tak dají cenu hodnoty v tabulce do dané váhy. Váha je optimalizovaná tak, že všechny váhy se vydělí nejvetším společným dělitelem všech vah. Někdy to může ušetřit pamět, pokud není nějaká váha prvočíslo. Je to algoritmus zpětné rekurze vyplnování pomocí DFS. Rekurze je implementovaná pomocí zásobníku.
-
-Dynamický programování - rozklad podle cen
-------------------------------------------
-
-Algoritmus je realizován podobně jak v rozkladu podle váh. Tabulka má indexy `table[item][cost]` a hodnota určuje nejmenší možnou váhu, kterou dosáhnu přidáním předmětů $[0, item)$. Cena je opět vydělená podle největšího společného dělitele všech cen. Algoritmus je realizován BFS průchodem.
-
-Opět algoritmus obsahuje optimalizaci filtrace a řazení, ale navíc v této verzi je realizované i ořezávání podle cost/weight ratia. Narozdíl od prořezávání to nepomůže násobně, ale jen o jednotky až desítky procent. Aby jsme mohli hned relativně efektivně prořezávat, tak první předpočítá řešení pomocí redux metody.
-
-FTPAS
------
-
-Tento algoritmus je naprosto totožný, jak rozklad podle cen. Jediný rozdíl je, že před předáním do rozkladu podle cen se první všechny ceny vydělí vynuceným dělitelem a modulo ceny se zanedbá. Při zadání čísla, které je mocnina dvojky, tak metoda degraduje na metodu zanedbání bitů z přednášky.
-
-Označíme si počet předmětů jako $n$, vynucený dělitel jako $gcd$. Naivně se dá maximální chyba odhadnout jako $n . (gcd - 1)$. Nicméně když máme už konkrétní instanci, tak to můžem udělat lépe. Můžeme spočítat, kolik nejvýše se vejde předmětů do batohu, označím $m$ (například seřadíme váhy vzestupně a berem tolik předmětů, kolik se jich vejde do batohu). Pak seřadíme zbytky cen po vydělení $gcd$ a součet prvních nejvyších $m$ zbytků je maximální možná chyba.
-
-Greedy a Redux
---------------
-
-
-Testovací stroj
----------------
-
-Testování probíhá na procesoru `AMD 2700X` s frekvencí staticky nastavenou na $4,1GHz$. Systém je `ArchLinux` virtualizovaný pomocí Windows WSL. Podle testování to fungovalo rychleji, než nativně o víc jak $10\%$. (Např. rozklad podle ceny na instanci `NK40` trval nativně celkem $3,55s$ a ve WSL $2,53s$. Přepokládám, že to je spíš vyspělostí Rustu/LLVM na Linuxu oproti Windows spíš, než čímkoliv jiným.)
-
-Testování exaktních metod
--------------------------
-
-Pro testování výkonnosti jsem na všech 3 setech (NK, ZKC, ZKW) spustil pro všechny velikosti 10x všechny solvery, kromě naivního, který jsem spustil jen do velikosti 22. Celkem to trvalo 15 min, což není hrozný vzhledem k tomu, že se vše opakovalo 10x. Průměry i maxima jsem zprůměroval.
-
-<span style="color:red">Červená</span> je naivní, <span style="color:purple">fialová</span> prořezávání, <span style="color:blue">modrá</span> rozklad podle váhy a <span style="color:green">zelená</span> rozklad podle ceny. <span style="text-decoration: underline">Plná čára je průměr</span> a <span style="text-decoration:underline dotted">přerušovaná maximum</span>. Na grafech je čas v logaritmickém měřítku, aby tam šlo něco rozpoznat u rychlejších metod.
+Prořezávání prořezává mnohem lépe, proto sadu NK řeší mnohem rychleji, než implementace v 2. iteraci. Nově se bere v úvahu navíc zbývajicí cena a spočítá se přesně maximální dosáhnutelná cena v $O(ln n)$ času. To je možné tím, že mám pole součtu vah od určitého indexu do posledního, stejně s cenama. Poté binárně vyhledávám váhu takovou, že se akorát vejde zbývajicí kapacita. Vzhledem k tomu, že předměty jsou seřazený podle `cost/weight` ratia, tak když vemu předchozí předměty a poměrovou část poslední, tak to je maximální dosažitelná cena. Přikládám graf vylepšeného prořezávání na sadě NK. Během minulé iterace se prořezávání protínalo s rozkladem podle ceny. Sady `ZKC` a `ZKW` se téměř nezměnili.
 
 ![](NK.png)
 
-![](ZKC.png)
+Předměty se nově neřadí pouze podle `cost/weight` ratia, ale navíc se řadí od nejtěžšího po nejlehčí, pokud mají stejný poměr. To zaručí, že stejné předměty jsou vedle sebe a díky tomu je možné filtrovat permutace stejného předmětu v prořezávání (stejným předmětem se myslí předmět, co má stejnou cenu i váhu s jiným).
 
-![](ZKW.png)
+Jednotlivé algoritmy jsou nově rozdělené do jednotlivých souborů.
 
-Následuje tabulka s přesnýma číslama k velikosti instance 20 a 40.
+Naivní implementace
+-------------------
 
-|  | prořezávání | rozklad podle váh | rozklad podle cen |
-|---------|--:|--:|--:|
-| `NK20` |
-| průměrný čas | $12,2µs$ | $144,0µs$ | $416,8µs$ |
-| maximální čas | $123,5µs$ | $573,4µs$ | $23,4ms$ |
-| `NK40` |
-| průměrný čas | $23,3ms$ | $658,4µs$ | $5,1ms$ |
-| maximální čas | $839,4ms$ | $2,7ms$ | $162,7ms$ |
-||
-| `ZKC20` |
-| průměrný čas | $17,7µs$ | $159,9µs$ | $1,4ms$ |
-| maximální čas | $65,2µs$ | $392,1µs$ | $83,5ms$ |
-| `ZKC40` |
-| průměrný čas | $10,8ms$ | $723,5µs$ | $7,7ms$ |
-| maximální čas | $157,1ms$ | $2,0ms$ | $159,9ms$ |
-||
-| `ZKW20` |
-| průměrný čas | $1,7µs$ | $9,3µs$ | $620,2µs$ |
-| maximální čas | $7,0µs$ | $83,5µs$ | $9,4ms$ |
-| `ZKW40` |
-| průměrný čas | $2,5µs$ | $15,9µs$ | $1,6ms$ |
-| maximální čas | $9,6µs$ | $204,6µs$ | $10,2ms$ |
+Naivní implementace je necitlivá na jakýkoliv kombinace cen, váh. Ta projde naivně všechny kombinaci a tedy se chová čistě exponencionálně - nemá smysl měřit vliv jednotlivých vstupů, protože jediné na co reaguje je velikost.
 
-Naivní funguje na všech třech instancích stejně, což je očekáváné. Zajimavé je, že všechny ostatní metody fungují na sadě profesora zlomyslného rychleji než na normální. U ZKW to je tím, že je tam spousta předmětů, která je přes maximální kapacitu a tak se ani do samotných algoritmů nedostanou, ale ořeže je předzpracování.
+Robustnost
+----------
 
-Podle předpokladu Naivní a prořezávání se chová exponencionálně. Kromě zmíněného ZKW, kde se tam velká část předmětů nedostane a tak čas má pořád na úrovni malé instance, kde je zároveň rychlejší jak rozklady.
+Všechny zbývajicí metody přeuspořádají předměty podle `cost/weight` ratia primárně a podle váhy sekundárně (oboje sestupně). Vzhledem k tomu, že si předměty deterministicky seřadí před samotným spuštěním algoritmu, tak nemá smysl měřit vliv permutací, protože jediné co ovlivní je maximálně samotné řazení. V předchozí zprávě vycházel čas Reduxu maximálně $8,5µs$ (velikost instance 40). V této metodě je hlavní brzda právě samotné řazení - dá se očekávat, že řazení před spuštěním algoritmu se podílí na času při velikosti instance 40 přibližně takovýmhle časem. Všechny metody jsou tímto robustní a je zbytečné to experimentálně ověřovat.
 
-Rozklad podle ceny je pomalejší než rozklad podle váhy, ale jeho význam je použití ve FTPAS. Oba rozklady se chovají lineárně.
+Prvotní testování parametrů
+---------------------------
 
-Obecně platí, že pro malé instance je nejlepší prořezávání, ale jakmile je velikost dostatečně velká, tak začíná být lepší rozklad podle váhy a dá se předpokládat, že ten se tam udrží
+Na začátek zkusím vygenerovat instance (500) s výchozíma parametrama, maximální cenu i váhu nastavím na $1 000$, poměr kapacity/součtu $0,8$ a velikosti jako byli v dodaných instancích, abych to uměl porovnat.
 
-Testování approximačních metod
-------------------------------
+![](PP.png)
 
-Testování probíhá na instanci `NK40`, která má 500 problémů. Greedy ani neuvádím, na sadě `NK40` dopadlo stejně, jak redux a je rychlejší o pár desetin mikrosekundy, které se dají spíš přisuzovat náhodě. Na sadě `NK37` mělo greedy o jednu chybu víc.
+Podle očekávání tato sada dopadla srovnatelně s NK. Pojmenuji ji jako PP (první pokus).
 
-Průměrná a relativní chyba je spočítaná jen přes chybující problémy, správné do výpočtu nejsou započítaný. Výpočet maximální chyby je nastíněný v části FTPAS.
+Zvyšování ceny a váhy
+---------------------
 
-| `NK40`                    | redux   | ftpas 1   | ftpas 2     | ftpas 5   | ftpas 10  | ftpas 50 | ftpas 100 | ftpas 200 |
-|---------------------------|--------:|----------:|------------:|----------:|----------:|---------:|----------:|----------:|
-| průměrný čas              | $3,3µs$ | $5,0ms$   | $2,0ms$     | $782,1µs$ | $427,4µs$ | $92,4µs$ | $51,9µs$  | $27,2µs$  |
-| maximální čas             | $8,5µs$ | $155,0ms$ | $76,8ms$    | $30,1ms$  | $15,3ms$  | $2,8ms$  | $1,5ms$   | $492,8µs$ |
-| počet chyb                | $260$   | $0$       | $1$         | $9$       | $12$      | $60$     | $121$     | $213$     |
-| průměrná chyba            | $218,9$ | $0$       | $2$         | $2,3$     | $3,1$     | $27,2$   | $53,5$    | $111,7$   |
-| průměrná relativní chyba  | -       | -         | $12,5\%$    | $3,3\%$   | $2,1\%$   | $3,4\%$  | $3,4\%$   | $3,6\%$   |
-| maximální relativní chyba | -       | -         | $12,5\%$    | $4,8\%$   | $6,3\%$   | $14,3\%$ | $16,9\%$  | $12,7\%$  |
+Provedu 2 pokusy, první zvýšim jen maximální cenu na $10\times 1 000$, poté jen váhu. Předpoklad je, že takováta modifikace by měla vadit jen rozkladu podle ceny a váhy podle toho, co zvyšuji. Sada MC je s nastavením jako PP, akorát cena je na $10 000$. Sada MW obdobně pro váhu.
 
-| `ZKC40`                   | redux   | ftpas 1   | ftpas 2     | ftpas 5   | ftpas 10  | ftpas 50  | ftpas 100 | ftpas 200 |
-|---------------------------|--------:|----------:|------------:|----------:|----------:|----------:|----------:|----------:|
-| průměrný čas              | $3,2µs$ | $7,59ms$  | $2,0ms$     | $1,1ms$   | $544,5µs$ | $122,8µs$ | $61,6µs$  | $31,1µs$  |
-| maximální čas             | $8,54s$ | $157,5ms$ | $76,8ms$    | $32,1ms$  | $15,6ms$  | $2,8ms$   | $1,4ms$   | $539,9µs$ |
-| počet chyb                | $485$   | $0$       | $71$        | $229$     | $327$     | $453$     | $474$     | $500$     |
-| průměrná chyba            | $884,9$ | $0$       | $1,3$       | $3,4$     | $6,2$     | $28,2$    | $66,5$    | $415,2$   |
-| průměrná relativní chyba  | -       | -         | $6,5\%$     | $4,4\%$   | $3,6\%$   | $3,1\%$   | $3.5\%$   | $11,2\%$  |
-| maximální relativní chyba | -       | -         | $16,6\%$    | $14,1\%$  | $13,1\%$  | $8,1\%$   | $21,2\%$  | $32,7\%$  |
+![](MC.png)
 
-Dataset `NKW` jsem vynechal, protože většina předmětů je vyfiltrována a tak tam moc správných odpovědí ani nezůstává. Např. `NKW40` s dělitelem 256 obsahoval pouze 3 chyby.
+![](MW.png)
 
-FTPAS časově dopadl podle očekávání, při gcd 1 dopadl nastejno s rozkladem podle cen, a pak lineárně zvyšoval čas podle zvoleného gcd. Redux je velmi jednoduchá taktika jen s jedním řazením, tak překonat ho složitějším FTPASem je možný až když jeho přesnost začíná být zoufalá.
+Dopadlo to podle očekávání - zvyšování ceny zhoršilo pouze čas na rozkladu podle ceny a zvyšování váhy pouze čas na rozkladu podle váhy.
 
-Ohledně chyb na `NK40` dopadl silně nad očekávání. dokonce i s největším dělitelem 200 chyboval v méně než polovině instancí. Dokonce tam kde chyboval, tak procento možný chyby je pouze 4%.
+Korelace váhy a ceny
+--------------------
 
+Tady udělám 2 sady: CC a SC. CC je shodná s nastavením PP, ale korelace je na `corr`. SC má korelaci na `strong`. Předpoklad je, že nejvíce to bude vadit prořezávání a rozkladům by to nemělo vadit a nebo lehce pomoct.
+
+![](CC.png)
+
+![](SC.png)
+
+Přesně podle předpokladu větší korelace zpomaluje prořezávání. Navíc trochu zpomaluje i rozklad podle ceny, protože tam mám taky ořezávání. Ikdyž je tam menší než v samotném prořezávání.
+
+Poměr kapacity k sumární váze
+-----------------------------
+
+V této sadě zafixuji velikost na 40 a budu hýbat s poměrem kapacity. Ostatní nastavení bude podle PP. Předpoklad je, že nějaký poměr bude nejtěžší a bude to okolo něho tvořit přibližně tvar normální rozdělení. Rozklady budou mít nejmenší hodnotu relativně vysoko díky větší konstantní složitosti a naopak prořezávání půjde k hodně malým číslům, jak bude moct mnohem lépe prořezávat. Navíc i rozklady by měli růst, ale jestli budou mít maxima nedokážu odhadnout.
+
+
+![](BR.png)
+
+Při nekorelované váze a ceně je tvar jiný, než jsem ho naměřil při pokusném spouštění. Proto zkusím ještě udělat datové soubory CR s SR (korelace na `corr` a `strong`).
+
+![](CR.png)
+
+![](SR.png)
+
+Při nekorelované váze a ceně je nejdelší prořezávání asi okolo poměru $0,55$. Při korelované verzi je vrchol lehce nad $0,8$. Prořezávání je hodně citlivé na tento poměr a při vhodné korelaci se výpočet prodlouží.
+
+Oba rozklady rostou přibližně lineárně s poměrem - což je efekt toho, že se zvyšuje lineárně maximální kapacita a maximální cena, zatímco předměty mají pořád stejný rozsah cen a vah.
+
+Vliv nepoměru věcí
+------------------
+
+Předpokládám, že to nejvíc bude ovlivnovat prořezávání - tedy rovnou zafixuji korelaci na `corr` a `strong`. $-1$ v grafu odpovídá nastavení `light` a $k = 1$. $1$ v grafu odpovídá nastavení `heavy` a $k = 1$. 0 odpovídá nastavení `bal`. `CB` je typicky s korelací na `corr` a `SB` s korelací `strong`.
+
+![](CB.png)
+
+![](SB.png)
+
+Vliv nepoměru věcí má spíše malý vliv. Rozklady se zvyšovali s tím, jak se zvyšovala maximální kapacita a cena. U prořezávání to záleželo na míře korelace, ale rozdíly mezi vyváženíma byli cca do $2\times$.
 
 
 Závěr
 -----
 
-V exaktních metodách se mě povedlo výrazně vylepšit ořezávání, že dokonce největší instance je velice rychlá. Překvapením pro mě bylo zjištění, že `NK40` je hůře ořezatelná, než `ZKC`, která by měla podle instrukcí být navržená tak, aby nebyla ořezatelná. Provedl jsem oba rozklady a mám z toho závěr, že rozklad podle váhy je vhodnější, pravděpodobně protože je možné lépe omezit maximální váhu, než cenu. Rozklad podle váhy má výhodu v approximaci s povolenou chybou, protože je možné určit, kolik je její hodnota.
+Rozklad podle ceny je citlivý poze na maximální možnou cenu a velikost instance. Rozklad podle váhy stejně akorát na váhu.
 
-Rozklady mají mnohem větší overhead při menších instancích. Zvlášt rozklad podle ceny, na to je citlivý. Pro malé instance se tedy víc vyplatí prořezávání. Od určité velikosti ale vyhrává dynamické programování, pokud jsou ceny a váhy v rozumném rozpětí.
+V případě, že předměty nemají korelovanou váhu a cenu, tak bude vycházet nejlíp prořezávání - instance velikosti 40 zdaleka není limit.
 
-Metoda FTPAS dopadla výborně na datasetu `NK`, kde při zvoleném děliteli 10 překonala rychlost rozkladu podle váhy s minimálním počtem chyb. Výrazně hůř dopadla na datasetu `ZKC`, kdy při překonání rychlosti rozkladu podle váhy už chybovala ve více než polovině instancí. Všechny problémy v datasetu `NKC40` mají cílovou cenu přes $30 000$, tedy průměrná chyba $6,2$ není až tak významná.
+V případě korelované váhy je nejtěžší obsazenost $0,8$ kapacity. V případě nekorelované se to posune na $0,55$.
+
+Nevyváženost má na celkový čas spíše malý vliv, u rozkladů jde vidět lehce lineární, ale ona zároveň stoupá maximální cena a kapacita batohu, když je více těžších předmětů. Prořezávání víc vyhovuje převaha těžších předmětů v případě silné korelace. Naopak lehce lehčí uvítá v případě slabší korelaci.

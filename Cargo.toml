@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 structopt = "0.3"
 itertools = "0.9"
-lazy_format = "1.8"
+#lazy_format = "1.8"
 gcd = "2.0"
 num-rational = "0.3"
 derive_more = "0.99"

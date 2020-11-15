@@ -35,9 +35,9 @@ impl SolverTrait for PruningSolver {
                     * ratio.numer() / ratio.denom()
                     + cost
                     < best_cost
-                    || cost + problem.rem_cost[index] < best_cost
+                    || cost + problem.rem_cost[index] <= best_cost
                     // max_cost_from_rem is O(log n)
-                    || best_cost > cost + max_cost_from_rem(&problem.rem_cost[index..], &problem.rem_weight[index..], problem.p.max_weight - weight)
+                    || best_cost >= cost + max_cost_from_rem(&problem.rem_cost[index..], &problem.rem_weight[index..], problem.p.max_weight - weight)
                 {
                     return best_cost;
                 }
@@ -88,7 +88,7 @@ impl SolverTrait for PruningSolver {
             sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
 
         // items are already filtered by weight, so u32::MAX is fine
-        let best_item = best_valued_item_fit(&items, std::u32::MAX);
+        let best_item = best_valued_item_fit(&items, u32::MAX);
 
         let mut aug_problem = ProblemWithRatios {
             rem_cost: calc_remaining_cost(&items),
