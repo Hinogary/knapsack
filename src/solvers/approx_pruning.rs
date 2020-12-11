@@ -1,5 +1,4 @@
 use super::{
-    ratio,
     utils::{
         best_valued_item_fit, calc_remaining_cost, calc_remaining_weight, max_cost_from_rem,
         sort_by_cost_weight_ratio,
@@ -8,17 +7,20 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct PruningSolver();
+pub struct ApproxPruningSolver {
+    pub precision: u32, //100 means at most 1% error
+}
 
 #[derive(Debug, Clone)]
 struct ProblemWithAddedInfo {
     p: Problem,
+    precision: u32,
     rem_weight: Vec<u32>,
     rem_cost: Vec<u32>,
     best_solution: Vec<bool>,
 }
 
-impl SolverTrait for PruningSolver {
+impl SolverTrait for ApproxPruningSolver {
     fn construction(&self, problem: &Problem) -> Solution {
         fn rec_fn(
             problem: &mut ProblemWithAddedInfo,
@@ -29,14 +31,15 @@ impl SolverTrait for PruningSolver {
             last_selected: bool,
         ) -> u32 {
             if index < problem.p.items.len() {
+                let best_cost_bigger = best_cost * (problem.precision + 1) / problem.precision;
                 let ratio = problem.p.items[index].cost_weight_ratio();
                 if (problem.p.max_weight - weight).min(problem.rem_weight[index])
                     * ratio.numer() / ratio.denom()
                     + cost
-                    < best_cost
-                    || cost + problem.rem_cost[index] <= best_cost
+                    <= best_cost_bigger
+                    || cost + problem.rem_cost[index] <= best_cost_bigger
                     // max_cost_from_rem is O(log n)
-                    || best_cost >= cost + max_cost_from_rem(&problem.rem_cost[index..], &problem.rem_weight[index..], problem.p.max_weight - weight)
+                    || best_cost_bigger >= cost + max_cost_from_rem(&problem.rem_cost[index..], &problem.rem_weight[index..], problem.p.max_weight - weight)
                 {
                     return best_cost;
                 }
@@ -89,6 +92,7 @@ impl SolverTrait for PruningSolver {
         let best_item = best_valued_item_fit(&items, u32::MAX);
 
         let mut aug_problem = ProblemWithAddedInfo {
+            precision: self.precision,
             rem_cost: calc_remaining_cost(&items),
             rem_weight: calc_remaining_weight(&items),
             best_solution: (0..items.len()).map(|i| i == best_item.1).collect(),

@@ -1,7 +1,6 @@
-use super::{ratio, Item, Problem};
+use super::{Item, Problem};
 use itertools::Itertools;
 use std::cmp::Reverse;
-use unzip3::Unzip3;
 
 pub fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
     use itertools::FoldWhile::{Continue, Done};
@@ -30,17 +29,14 @@ pub fn calculate_practical_ftpas_error(problem: &Problem, gcd: u32) -> u32 {
 }
 
 // returns (new items, cost/weight ratios descending, mapping [new array] -> [original array])
-pub fn sort_by_cost_weight_ratio(
-    items: &[Item],
-    max_weight: u32,
-) -> (Vec<Item>, Vec<ratio>, Vec<usize>) {
+pub fn sort_by_cost_weight_ratio(items: &[Item], max_weight: u32) -> (Vec<Item>, Vec<usize>) {
     items
         .iter()
         .enumerate()
-        .map(|(index, item)| (*item, ratio::new(item.cost, item.weight), index))
-        .filter(|(item, _, _)| item.weight <= max_weight)
-        .sorted_by_key(|x| Reverse((x.1, x.0.weight)))
-        .unzip3()
+        .map(|(index, item)| (*item, index))
+        .filter(|(item, _)| item.weight <= max_weight)
+        .sorted_by_key(|x| Reverse((x.0.cost_weight_ratio(), x.0.weight)))
+        .unzip()
 }
 
 // O(ln n)

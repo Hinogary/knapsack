@@ -22,6 +22,12 @@ use greedy::GreedySolver;
 mod redux;
 use redux::ReduxSolver;
 
+mod tabusearch;
+use tabusearch::TabuSearchSolver;
+
+mod approx_pruning;
+use approx_pruning::ApproxPruningSolver;
+
 use enum_dispatch::enum_dispatch;
 
 pub use super::Opts;
@@ -44,6 +50,8 @@ pub enum Solver {
     Greedy(GreedySolver),
     Redux(ReduxSolver),
     FTPAS(FTPASSolver),
+    TabuSearch(TabuSearchSolver),
+    ApproxPruning(ApproxPruningSolver),
 }
 pub use Solver::*;
 
@@ -65,7 +73,7 @@ impl Solver {
     pub fn is_exact(&self) -> bool {
         match self {
             Naive(_) | Pruning(_) | DynamicWeight(_) | DynamicCost(_) => true,
-            Greedy(_) | Redux(_) | FTPAS(_) => false,
+            Greedy(_) | Redux(_) | FTPAS(_) | ApproxPruning(_) | TabuSearch(_) => false,
         }
     }
 
@@ -79,21 +87,27 @@ impl Solver {
                 opts.greedy,
                 opts.redux,
                 opts.ftpas.is_some(),
+                opts.approxprunning.is_some(),
             ) {
-                (true, false, false, false, false, false, false) => Naive(NaiveSolver()),
-                (false, true, false, false, false, false, false) => Pruning(PruningSolver()),
-                (false, false, true, false, false, false, false) => {
+                (true, false, false, false, false, false, false, false) => Naive(NaiveSolver()),
+                (false, true, false, false, false, false, false, false) => Pruning(PruningSolver()),
+                (false, false, true, false, false, false, false, false) => {
                     DynamicWeight(DynamicWeightSolver())
                 }
-                (false, false, false, true, false, false, false) => {
+                (false, false, false, true, false, false, false, false) => {
                     DynamicCost(DynamicCostSolver())
                 }
-                (false, false, false, false, true, false, false) => Greedy(GreedySolver()),
-                (false, false, false, false, false, true, false) => Redux(ReduxSolver()),
-                (false, false, false, false, false, false, true) => FTPAS(FTPASSolver {
+                (false, false, false, false, true, false, false, false) => Greedy(GreedySolver()),
+                (false, false, false, false, false, true, false, false) => Redux(ReduxSolver()),
+                (false, false, false, false, false, false, true, false) => FTPAS(FTPASSolver {
                     gcd: opts.ftpas.unwrap(),
                 }),
-                (false, false, false, false, false, false, false) => {
+                (false, false, false, false, false, false, false, true) => {
+                    ApproxPruning(ApproxPruningSolver {
+                        precision: opts.approxprunning.unwrap(),
+                    })
+                }
+                (false, false, false, false, false, false, false, false) => {
                     return Err(DisplayError("Not any solver selected!".to_string()))
                 }
                 _ => return Err(DisplayError("Too many solvers selected!".to_string())),

@@ -12,7 +12,6 @@ gcd = "2.0"
 num-rational = "0.3"
 derive_more = "0.99"
 enum_dispatch = "0.3"
-unzip3 = "1.0.0"
 
 [profile.release]
 lto="thin"

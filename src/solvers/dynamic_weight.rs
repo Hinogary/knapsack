@@ -7,7 +7,7 @@ pub struct DynamicWeightSolver();
 impl SolverTrait for DynamicWeightSolver {
     fn construction(&self, problem: &Problem) -> Solution {
         // backtracking only
-        let (mut items, _ratios, mut mapping) =
+        let (mut items, mut mapping) =
             sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
 
         if items.is_empty() {

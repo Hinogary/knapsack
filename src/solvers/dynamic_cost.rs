@@ -16,9 +16,8 @@ pub struct DynamicCostSolver();
 impl SolverTrait for DynamicCostSolver {
     fn construction(&self, problem: &Problem) -> Solution {
         // mainly foward tracking but backtracing solution
-        let (mut items, mut ratios, mut mappings) =
+        let (mut items, mut mappings) =
             sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
-        ratios.push(ratio::new(0, 1));
 
         if items.is_empty() {
             items.push(Item {
@@ -38,10 +37,6 @@ impl SolverTrait for DynamicCostSolver {
         if cost_gcd > 1 {
             for item in &mut items {
                 item.cost /= cost_gcd;
-            }
-
-            for ratio in &mut ratios {
-                *ratio /= cost_gcd;
             }
         }
 
@@ -114,7 +109,10 @@ impl SolverTrait for DynamicCostSolver {
             }
 
             // pruning same as in recursive pruning
-            let ratio = ratios[without_item.0];
+            let ratio = items
+                .get(without_item.0)
+                .map(|x| x.cost_weight_ratio())
+                .unwrap_or(ratio::new(0, 1)); //ratios[without_item.0];
             if (max_weight - weight).min(rem_weight[without_item.0]) * ratio.numer() / ratio.denom()
                 + cost
                 < best_cost

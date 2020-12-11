@@ -5,7 +5,7 @@ pub struct GreedySolver();
 
 impl SolverTrait for GreedySolver {
     fn construction(&self, problem: &Problem) -> Solution {
-        let (items, _, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
+        let (items, mappings) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
         let (items, cost) =
             construction_greedy_inner(&items, &mappings, problem.size, problem.max_weight);
         Solution {

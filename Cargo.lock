@@ -119,7 +119,6 @@ dependencies = [
  "itertools",
  "num-rational",
  "structopt",
- "unzip3",
 ]
 
 [[package]]
@@ -291,12 +290,6 @@ name = "unicode-xid"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
-
-[[package]]
-name = "unzip3"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99c0ec316ab08201476c032feb2f94a5c8ece5b209765c1fbc4430dd6e931ad6"
 
 [[package]]
 name = "vec_map"

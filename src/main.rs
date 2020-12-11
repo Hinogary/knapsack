@@ -59,7 +59,6 @@ fn main() -> Result<(), Error> {
             if ref_solutions.is_some() && (problem.min_cost.is_none() || opts.force_construction) {
                 let reference = ref_solutions.as_ref().unwrap().get(&solution.id).unwrap();
                 additional_info += &check_solution(reference, &solution, problem, &solver, &opts);
-
             }
             println!("time: {:?} {}\n{}", elapsed, additional_info, output);
 
@@ -67,11 +66,7 @@ fn main() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    let max_time = durations
-        .iter()
-        .max()
-        .cloned()
-        .unwrap();
+    let max_time = durations.iter().max().cloned().unwrap();
 
     let avg_time = durations
         .iter()
@@ -88,7 +83,13 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn check_solution(reference: &Solution, solution :&Solution, problem: &Problem, solver: &Solver, opts: &Opts) -> String{
+fn check_solution(
+    reference: &Solution,
+    solution: &Solution,
+    problem: &Problem,
+    solver: &Solver,
+    opts: &Opts,
+) -> String {
     if solver.is_exact() {
         if *reference != *solution
             && reference.cost == solution.cost
@@ -149,13 +150,23 @@ pub struct Opts {
     #[structopt(long)]
     ftpas: Option<u32>,
     #[structopt(long)]
+    approxprunning: Option<u32>,
+    #[structopt(long)]
     force_construction: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Item {
-    weight: u32,
     cost: u32,
+    weight: u32,
+}
+
+use solvers::ratio;
+
+impl Item {
+    fn cost_weight_ratio(&self) -> ratio {
+        return ratio::new_raw(self.cost, self.weight);
+    }
 }
 
 #[derive(Debug, Clone)]
