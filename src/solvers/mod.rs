@@ -55,6 +55,7 @@ pub enum Solver {
 }
 pub use Solver::*;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Methods {
     Naive,
     Pruning,
@@ -67,6 +68,7 @@ pub enum Methods {
     ApproxPruning,
 }
 
+use itertools::Itertools;
 use std::str::FromStr;
 
 impl FromStr for Methods {
@@ -81,14 +83,29 @@ impl FromStr for Methods {
             ("redux", Self::Redux),
             ("ftpas", Self::FTPAS),
             ("tabu-search", Self::TabuSearch),
+            ("approx-pruning", Self::ApproxPruning),
         ];
-        methods.iter().map(
-            |(method_name, method)|
-                if method_name == name {Some(Ok(method))} else None)
-            ).next().unwrap_or_else(|| format!("Method {} not found, following are valid: {}", name methods.map(|x|x.0).join(", ")))
+        methods
+            .iter()
+            .map(|(method_name, method)|
+                if *method_name == name {
+                    Some(Ok(*method))
+                } else {
+                    None
+                }
+            )
+            .find(|x| x.is_some())
+            .unwrap_or(None)
+            .unwrap_or_else(|| {
+                Err(format!(
+                    "Method {:?} not found, following are valid: {}.",
+                    name,
+                    methods.iter().map(|x| x.0).join(", ")
+                )
+                .into())
+            })
     }
 }
-
 
 #[enum_dispatch(Solver)]
 pub trait SolverTrait {
@@ -113,40 +130,39 @@ impl Solver {
     }
 
     pub fn from_opts(opts: &Opts) -> Result<Solver, DisplayError> {
-        Ok(
-            match (
-                opts.naive,
-                opts.pruning,
-                opts.dynamic_weight,
-                opts.dynamic_cost,
-                opts.greedy,
-                opts.redux,
-                opts.ftpas.is_some(),
-                opts.approxpruning.is_some(),
-            ) {
-                (true, false, false, false, false, false, false, false) => Naive(NaiveSolver()),
-                (false, true, false, false, false, false, false, false) => Pruning(PruningSolver()),
-                (false, false, true, false, false, false, false, false) => {
-                    DynamicWeight(DynamicWeightSolver())
-                }
-                (false, false, false, true, false, false, false, false) => {
-                    DynamicCost(DynamicCostSolver())
-                }
-                (false, false, false, false, true, false, false, false) => Greedy(GreedySolver()),
-                (false, false, false, false, false, true, false, false) => Redux(ReduxSolver()),
-                (false, false, false, false, false, false, true, false) => FTPAS(FTPASSolver {
-                    gcd: opts.ftpas.unwrap(),
-                }),
-                (false, false, false, false, false, false, false, true) => {
-                    ApproxPruning(ApproxPruningSolver {
-                        precision: opts.approxpruning.unwrap(),
-                    })
-                }
-                (false, false, false, false, false, false, false, false) => {
-                    return Err(DisplayError("Not any solver selected!".to_string()))
-                }
-                _ => return Err(DisplayError("Too many solvers selected!".to_string())),
-            },
-        )
+        Ok(match opts.method {
+            Methods::Naive => Naive(NaiveSolver()),
+            Methods::Pruning => Pruning(PruningSolver()),
+            Methods::DynamicWeight => DynamicWeight(DynamicWeightSolver()),
+            Methods::DynamicCost => DynamicCost(DynamicCostSolver()),
+            Methods::Greedy => Greedy(GreedySolver()),
+            Methods::Redux => Redux(ReduxSolver()),
+            Methods::FTPAS => FTPAS(FTPASSolver {
+                gcd: if let Some(p) = opts.precision {
+                    p
+                } else {
+                    return Err("Missing precision option.".into());
+                },
+            }),
+            Methods::ApproxPruning => ApproxPruning(ApproxPruningSolver {
+                precision: if let Some(p) = opts.precision {
+                    p
+                } else {
+                    return Err("Missing precision option.".into());
+                },
+            }),
+            Methods::TabuSearch => TabuSearch(TabuSearchSolver{
+                memory_size: if let Some(m) = opts.memory_size {
+                    m
+                } else {
+                    return Err("Missing memory option.".into())
+                },
+                iterations: if let Some(i) = opts.iterations {
+                    i
+                } else {
+                    return Err("Missing iterations option.".into())
+                },
+            })
+        })
     }
 }

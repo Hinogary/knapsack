@@ -107,7 +107,7 @@ fn check_solution(
         let relative_error = (ref_cost - cost) / ref_cost;
 
         if let FTPAS(_) = solver {
-            let gcd = opts.ftpas.unwrap();
+            let gcd = opts.precision.unwrap();
             let practical_error = calculate_practical_ftpas_error(&problem, gcd);
 
             format!(
@@ -130,30 +130,31 @@ fn check_solution(
 #[display(fmt="{}", self.0)]
 pub struct DisplayError(String);
 
+impl std::convert::From<&str> for DisplayError {
+    fn from(err: &str) -> DisplayError {
+        DisplayError(err.to_string())
+    }
+}
+
+impl std::convert::From<String> for DisplayError {
+    fn from(err: String) -> DisplayError {
+        DisplayError(err)
+    }
+}
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "knapsack", author = "Martin Quarda <martin@quarda.cz>")]
 pub struct Opts {
+    method: Methods,
     input_task: ProblemFromfile,
     solution: Option<SolutionsFromFile>,
-    method: Methods,
-    #[structopt(long)]
-    naive: bool,
-    #[structopt(long)]
-    pruning: bool,
-    #[structopt(long)]
-    dynamic_weight: bool,
-    #[structopt(long)]
-    dynamic_cost: bool,
-    #[structopt(long)]
-    greedy: bool,
-    #[structopt(long)]
-    redux: bool,
-    #[structopt(long)]
-    ftpas: Option<u32>,
-    #[structopt(long)]
-    approxpruning: Option<u32>,
+    precision: Option<u32>,
     #[structopt(long)]
     force_construction: bool,
+    #[structopt(long)]
+    memory_size: Option<usize>,
+    #[structopt(long)]
+    iterations: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

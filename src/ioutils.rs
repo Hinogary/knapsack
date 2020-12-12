@@ -11,17 +11,16 @@ impl FromStr for SolutionsFromFile {
         Ok(SolutionsFromFile(
             fs::read_to_string(file_name)
                 .map_err(|e| {
-                    DisplayError(format!(
+                    format!(
                         "Could not solution load file: {}, because: {}",
                         file_name, e
-                    ))
+                    )
                 })?
                 .lines()
                 .map(|line| {
                     parse_solution_line(line).map_err(|e| format!("{}\nSolution Line: {}", e, line))
                 })
-                .collect::<Result<_, _>>()
-                .map_err(DisplayError)?,
+                .collect::<Result<_, _>>()?,
         ))
     }
 }
@@ -34,23 +33,17 @@ impl FromStr for ProblemFromfile {
     fn from_str(file_name: &str) -> Result<ProblemFromfile, DisplayError> {
         Ok(ProblemFromfile(
             fs::read_to_string(file_name)
-                .map_err(|e| {
-                    DisplayError(format!(
-                        "Could not problem load file: {}, because: {}",
-                        file_name, e
-                    ))
-                })?
+                .map_err(|e| format!("Could not problem load file: {}, because: {}", file_name, e))?
                 .lines()
                 .map(|line| {
                     parse_problem_line(line).map_err(|e| format!("{}\nProblem Line: {}", e, line))
                 })
-                .collect::<Result<_, _>>()
-                .map_err(DisplayError)?,
+                .collect::<Result<_, _>>()?,
         ))
     }
 }
 
-pub fn next_parse_with_err<'a, T, K>(iter: &mut T) -> Result<K, String>
+pub fn next_parse_with_err<'a, T, K>(iter: &mut T) -> Result<K, DisplayError>
 where
     T: Iterator<Item = &'a str>,
     K: FromStr,
@@ -63,7 +56,7 @@ where
         .map_err(|e| format!("Could not parse number {:?}", e))?)
 }
 
-pub fn parse_problem_line(line: &str) -> Result<Problem, String> {
+pub fn parse_problem_line(line: &str) -> Result<Problem, DisplayError> {
     let mut iter = line.split(' ').filter(|x| !x.is_empty());
     let id: i32 = next_parse_with_err(&mut iter)?;
     let size = next_parse_with_err(&mut iter)?;
@@ -71,7 +64,7 @@ pub fn parse_problem_line(line: &str) -> Result<Problem, String> {
     let min_cost = match () {
         () if id < 0 => Ok(Some(next_parse_with_err(&mut iter)?)),
         () if id > 0 => Ok(None),
-        _ => Err("zero id not permitted".to_string()),
+        _ => Err("zero id not permitted"),
     }?;
     let items = (0..size)
         .map(|_| {
@@ -79,7 +72,7 @@ pub fn parse_problem_line(line: &str) -> Result<Problem, String> {
             let cost = next_parse_with_err(&mut iter)?;
             Ok(Item { weight, cost })
         })
-        .collect::<Result<Vec<_>, String>>()?;
+        .collect::<Result<Vec<_>, DisplayError>>()?;
     assert_eq!(
         iter.next(),
         None,
@@ -94,27 +87,24 @@ pub fn parse_problem_line(line: &str) -> Result<Problem, String> {
     })
 }
 
-pub fn parse_solution_line(line: &str) -> Result<Solution, String> {
+pub fn parse_solution_line(line: &str) -> Result<Solution, DisplayError> {
     let mut iter = line.split(' ').filter(|x| !x.is_empty());
     let id = next_parse_with_err(&mut iter)?;
     let size = next_parse_with_err(&mut iter)?;
     let cost = next_parse_with_err(&mut iter)?;
     let items = Some(
         (0..size)
-            .map(|_| {
-                match iter
-                    .next()
-                    .ok_or_else(|| "Not enough bits in line!".to_string())?
-                {
+            .map(
+                |_| match iter.next().ok_or_else(|| "Not enough bits in line!")? {
                     "1" => Ok(true),
                     "0" => Ok(false),
-                    _ => Err("Reference solution is not in (0, 1)!".to_string()),
-                }
-            })
-            .collect::<Result<Vec<_>, String>>()?,
+                    _ => Err("Reference solution is not in (0, 1)!".into()),
+                },
+            )
+            .collect::<Result<Vec<_>, DisplayError>>()?,
     );
     if iter.next() != None {
-        return Err("Line was not exhausted, wrong solution line!".to_string());
+        return Err("Line was not exhausted, wrong solution line!".into());
     }
     Ok(Solution {
         id,
