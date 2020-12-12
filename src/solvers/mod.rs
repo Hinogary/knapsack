@@ -87,13 +87,13 @@ impl FromStr for Methods {
         ];
         methods
             .iter()
-            .map(|(method_name, method)|
+            .map(|(method_name, method)| {
                 if *method_name == name {
                     Some(Ok(*method))
                 } else {
                     None
                 }
-            )
+            })
             .find(|x| x.is_some())
             .unwrap_or(None)
             .unwrap_or_else(|| {
@@ -151,18 +151,18 @@ impl Solver {
                     return Err("Missing precision option.".into());
                 },
             }),
-            Methods::TabuSearch => TabuSearch(TabuSearchSolver{
+            Methods::TabuSearch => TabuSearch(TabuSearchSolver {
                 memory_size: if let Some(m) = opts.memory_size {
                     m
                 } else {
-                    return Err("Missing memory option.".into())
+                    return Err("Missing memory option.".into());
                 },
                 iterations: if let Some(i) = opts.iterations {
                     i
                 } else {
-                    return Err("Missing iterations option.".into())
+                    return Err("Missing iterations option.".into());
                 },
-            })
+            }),
         })
     }
 }

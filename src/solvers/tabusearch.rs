@@ -1,4 +1,4 @@
-use super::{Item, Problem, Solution, SolverTrait, sort_by_cost_weight_ratio};
+use super::{sort_by_cost_weight_ratio, Item, Problem, Solution, SolverTrait};
 
 use arrayvec::ArrayVec;
 use itertools::izip;
@@ -28,7 +28,11 @@ impl SolverTrait for TabuSearchSolver {
 
         let (items, mapping) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
         let items = items.into_iter().rev().collect::<Vec<_>>();
-        let mappings = mapping.into_iter().rev().map(|i|items.len()-1-i).collect::<Vec<_>>();
+        let mappings = mapping
+            .into_iter()
+            .rev()
+            .map(|i| items.len() - 1 - i)
+            .collect::<Vec<_>>();
 
         let mut index_to_rewrite = 0;
         let mut tabu_size = 0;
@@ -56,22 +60,21 @@ impl SolverTrait for TabuSearchSolver {
                 },
             );
             // maximize function (- over_capacity, cost, _)
-            let cost_fn =
-                izip!((0..), state.iter(), problem.items.iter(), tabu.into_iter())
-                    .filter(|(_, _, _, tabu)| !tabu)
-                    .map(|(i, &current_state, item, _)| {
-                        let (new_weight, new_cost) = if current_state {
-                            (weight - item.weight, cost - item.cost)
-                        } else {
-                            (weight + item.weight, cost + item.cost)
-                        };
-                        if new_weight > problem.max_weight {
-                            (std::u32::MAX - new_weight, new_cost, i)
-                        } else {
-                            (std::u32::MAX, new_cost, i)
-                        }
-                    })
-                    .max();
+            let cost_fn = izip!((0..), state.iter(), problem.items.iter(), tabu.into_iter())
+                .filter(|(_, _, _, tabu)| !tabu)
+                .map(|(i, &current_state, item, _)| {
+                    let (new_weight, new_cost) = if current_state {
+                        (weight - item.weight, cost - item.cost)
+                    } else {
+                        (weight + item.weight, cost + item.cost)
+                    };
+                    if new_weight > problem.max_weight {
+                        (std::u32::MAX - new_weight, new_cost, i)
+                    } else {
+                        (std::u32::MAX, new_cost, i)
+                    }
+                })
+                .max();
             //println!("{:?}", cost_fn.map(|(x, y, z)|(std::u32::MAX - x, y, z)).unwrap());
             let index_to_switch = cost_fn.map(|(_, _, i)| i);
 
@@ -92,7 +95,7 @@ impl SolverTrait for TabuSearchSolver {
         let (cost, weight) = cost_weight(&state, &problem.items);
         if weight > problem.max_weight {
             Solution::empty(problem.id, problem.size)
-        }else {
+        } else {
             Solution {
                 id: problem.id,
                 cost,

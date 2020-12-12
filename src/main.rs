@@ -31,6 +31,8 @@ fn main() -> Result<(), Error> {
         None
     };
 
+    let mut stats = Stats::default();
+
     let durations = input
         .0
         .iter()
@@ -58,7 +60,8 @@ fn main() -> Result<(), Error> {
             let mut additional_info = "".to_string();
             if ref_solutions.is_some() && (problem.min_cost.is_none() || opts.force_construction) {
                 let reference = ref_solutions.as_ref().unwrap().get(&solution.id).unwrap();
-                additional_info += &check_solution(reference, &solution, problem, &solver, &opts);
+                additional_info +=
+                    &check_solution(reference, &solution, problem, &solver, &opts, &mut stats);
             }
             println!("time: {:?} {}\n{}", elapsed, additional_info, output);
 
@@ -79,8 +82,23 @@ fn main() -> Result<(), Error> {
 
     println!("Total time: {:?}", total_time);
 
+    if !solver.is_exact() && ref_solutions.is_some() {
+        println!(
+            "Maximum error: {} Average error: {}",
+            stats.relative_error_max,
+            stats.relative_error_total / stats.instances as f64
+        );
+    }
+
     println!("{} {}", max_time.as_secs_f64(), avg_time.as_secs_f64());
     Ok(())
+}
+
+#[derive(Default)]
+struct Stats {
+    instances: usize,
+    relative_error_total: f64,
+    relative_error_max: f64,
 }
 
 fn check_solution(
@@ -89,7 +107,9 @@ fn check_solution(
     problem: &Problem,
     solver: &Solver,
     opts: &Opts,
+    stats: &mut Stats,
 ) -> String {
+    stats.instances += 1;
     if solver.is_exact() {
         if *reference != *solution
             && reference.cost == solution.cost
@@ -102,9 +122,12 @@ fn check_solution(
         "".to_string()
     } else {
         let absolute_error = reference.cost - solution.cost;
-        let ref_cost = reference.cost as f32;
-        let cost = solution.cost as f32;
+        let ref_cost = reference.cost as f64;
+        let cost = solution.cost as f64;
         let relative_error = (ref_cost - cost) / ref_cost;
+
+        stats.relative_error_max = stats.relative_error_max.max(relative_error);
+        stats.relative_error_total += relative_error;
 
         if let FTPAS(_) = solver {
             let gcd = opts.precision.unwrap();
@@ -148,6 +171,7 @@ pub struct Opts {
     method: Methods,
     input_task: ProblemFromfile,
     solution: Option<SolutionsFromFile>,
+    #[structopt(long)]
     precision: Option<u32>,
     #[structopt(long)]
     force_construction: bool,
