@@ -150,7 +150,7 @@ pub struct Opts {
     #[structopt(long)]
     ftpas: Option<u32>,
     #[structopt(long)]
-    approxprunning: Option<u32>,
+    approxpruning: Option<u32>,
     #[structopt(long)]
     force_construction: bool,
 }

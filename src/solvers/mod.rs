@@ -87,7 +87,7 @@ impl Solver {
                 opts.greedy,
                 opts.redux,
                 opts.ftpas.is_some(),
-                opts.approxprunning.is_some(),
+                opts.approxpruning.is_some(),
             ) {
                 (true, false, false, false, false, false, false, false) => Naive(NaiveSolver()),
                 (false, true, false, false, false, false, false, false) => Pruning(PruningSolver()),
@@ -104,7 +104,7 @@ impl Solver {
                 }),
                 (false, false, false, false, false, false, false, true) => {
                     ApproxPruning(ApproxPruningSolver {
-                        precision: opts.approxprunning.unwrap(),
+                        precision: opts.approxpruning.unwrap(),
                     })
                 }
                 (false, false, false, false, false, false, false, false) => {

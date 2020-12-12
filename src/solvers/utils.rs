@@ -41,6 +41,19 @@ pub fn sort_by_cost_weight_ratio(items: &[Item], max_weight: u32) -> (Vec<Item>,
 
 // O(ln n)
 pub fn max_cost_from_rem(rem_costs: &[u32], rem_weights: &[u32], max_weight: u32) -> u32 {
+    // skips first weights, that are less than max_weight, speed ups easy cases, slower hard cases
+    let skip = {
+        rem_weights
+            .iter()
+            .zip(rem_weights.iter().skip(1))
+            .map(|(l, r)| l - r)
+            .enumerate()
+            .find(|(_, w)| *w <= max_weight)
+            .map(|x| x.0)
+            .unwrap_or(rem_costs.len() - 2)
+    } as usize;
+    let rem_costs = &rem_costs[skip..];
+    let rem_weights = &rem_weights[skip..];
     let mut l = 0;
     let mut r = rem_costs.len() - 2;
     if rem_weights[0] <= max_weight {
