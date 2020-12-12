@@ -55,6 +55,41 @@ pub enum Solver {
 }
 pub use Solver::*;
 
+pub enum Methods {
+    Naive,
+    Pruning,
+    DynamicWeight,
+    DynamicCost,
+    Greedy,
+    Redux,
+    FTPAS,
+    TabuSearch,
+    ApproxPruning,
+}
+
+use std::str::FromStr;
+
+impl FromStr for Methods {
+    type Err = DisplayError;
+    fn from_str(name: &str) -> Result<Methods, DisplayError> {
+        let methods = [
+            ("naive", Self::Naive),
+            ("pruning", Self::Pruning),
+            ("dynamic-weight", Self::DynamicWeight),
+            ("dynamic-cost", Self::DynamicCost),
+            ("greedy", Self::Greedy),
+            ("redux", Self::Redux),
+            ("ftpas", Self::FTPAS),
+            ("tabu-search", Self::TabuSearch),
+        ];
+        methods.iter().map(
+            |(method_name, method)|
+                if method_name == name {Some(Ok(method))} else None)
+            ).next().unwrap_or_else(|| format!("Method {} not found, following are valid: {}", name methods.map(|x|x.0).join(", ")))
+    }
+}
+
+
 #[enum_dispatch(Solver)]
 pub trait SolverTrait {
     fn construction(&self, problem: &Problem) -> Solution;

@@ -135,6 +135,7 @@ pub struct DisplayError(String);
 pub struct Opts {
     input_task: ProblemFromfile,
     solution: Option<SolutionsFromFile>,
+    method: Methods,
     #[structopt(long)]
     naive: bool,
     #[structopt(long)]
