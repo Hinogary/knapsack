@@ -1,4 +1,4 @@
-use super::{sort_by_cost_weight_ratio, Item, Problem, Solution, SolverTrait};
+use super::{sort_by_cost_weight_ratio, Item, Problem, Solution, SolverTrait, ratio};
 
 use arrayvec::ArrayVec;
 use itertools::izip;
@@ -103,9 +103,8 @@ impl SolverTrait for TabuSearchSolver {
             let (cost, weight) = cost_weight(&state, &items);
 
             let blacklist = tabu.blacklist(&state, &mut blacklist_for_less_allocations);
-            //println!("{:?}", blacklist);
             // maximize function (- over_capacity, cost, _)
-            let cost_fn = izip!((0..), state.iter(), items.iter(), blacklist.iter())
+            let max_cost_fn = izip!((0..), state.iter(), items.iter(), blacklist.iter())
                 .filter(|(_, _, _, &blacklist)| !blacklist)
                 .map(|(i, &current_state, item, _)| {
                     let (new_weight, new_cost) = if current_state {
@@ -114,9 +113,9 @@ impl SolverTrait for TabuSearchSolver {
                         (weight + item.weight, cost + item.cost)
                     };
                     if new_weight > problem.max_weight {
-                        (std::u32::MAX - new_weight + problem.max_weight, new_cost, i)
+                        (ratio::new(new_cost, new_weight), new_cost, new_weight, i)
                     } else {
-                        (std::u32::MAX, new_cost, i)
+                        (ratio::new(std::u32::MAX, 1), new_cost, new_weight, i)
                     }
                 })
                 .max().unwrap_or_else(||{
@@ -124,25 +123,25 @@ impl SolverTrait for TabuSearchSolver {
                     izip!((0..), state.iter(), items.iter())
                     .map(|(i, &current_state, item)| {
                         let (new_weight, new_cost) = if current_state {
-                            (weight - item.weight, cost - item.cost)
+                            ((weight - item.weight), cost - item.cost)
                         } else {
                             (weight + item.weight, cost + item.cost)
                         };
                         if new_weight > problem.max_weight {
-                            (std::u32::MAX - new_weight + problem.max_weight, new_cost, i)
+                            (ratio::new(new_cost, new_weight), new_cost, new_weight, i)
                         } else {
-                            (std::u32::MAX, new_cost, i)
+                            (ratio::new(std::u32::MAX, 1), new_cost, new_weight, i)
                         }
                     })
                     .max().unwrap()
                 });
             tabu.insert(&state);
-            let index_to_switch = cost_fn.2;
+            let index_to_switch = max_cost_fn.3;
             state[index_to_switch] = !state[index_to_switch];
 
-            if cost_fn.0 == std::u32::MAX && best_cost < cost_fn.1 {
+            if max_cost_fn.2 <= problem.max_weight && best_cost < max_cost_fn.1 {
                 best_solution.iter_mut().zip(state.iter()).for_each(|(b, &s)| *b = s);
-                best_cost = cost_fn.1;
+                best_cost = max_cost_fn.1;
             }
             //switch state
         }
