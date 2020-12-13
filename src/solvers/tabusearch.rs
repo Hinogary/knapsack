@@ -41,7 +41,10 @@ impl<'a> TabuMemory {
     }
 
     fn blacklist<'b>(&self, state: &[bool], pass_memory: &'b mut [bool]) -> &'b [bool] {
-        let blacklist = self
+        pass_memory
+            .iter_mut()
+            .for_each(|x| *x = false);
+        self
             .tabu_raw
             .chunks(self.problem_size)
             .take(self.size)
@@ -56,13 +59,11 @@ impl<'a> TabuMemory {
                     .collect::<ArrayVec<[_; 2]>>()
                     .as_slice()
                 {
-                    &[] => unreachable!(),
                     &[(i, _)] => blacklist[i] = true,
                     _ => (),
                 };
                 blacklist
-            });
-        blacklist
+            }) as &[bool]
     }
 
     fn insert(&mut self, state: &[bool]) {
@@ -82,29 +83,29 @@ impl<'a> TabuMemory {
 
 impl SolverTrait for TabuSearchSolver {
     fn construction(&self, problem: &Problem) -> Solution {
-        let mut state = vec![true; problem.size];
 
         // Maybe this mappings helps little? not sure
         let (items, mapping) = sort_by_cost_weight_ratio(&problem.items, problem.max_weight);
-        let items = items.into_iter().rev().collect::<Vec<_>>();
-        let mappings = mapping
-            .into_iter()
-            .rev()
-            .map(|i| items.len() - 1 - i)
-            .collect::<Vec<_>>();
 
-        let mut tabu = TabuMemory::new(problem.size, self.memory_size);
+        if items.len() == 0 {
+            return Solution::empty(problem.id, problem.size);
+        }
 
-        let mut blacklist_for_less_allocations = vec![false; problem.size];
+        let mut state = vec![true; items.len()];
+        let mut best_solution = vec![false; items.len()];
+        let mut best_cost = 0;
+
+        let mut tabu = TabuMemory::new(items.len(), self.memory_size);
+
+        let mut blacklist_for_less_allocations = vec![false; items.len()];
 
         for _ in 0..self.iterations {
-            let (cost, weight) = cost_weight(&state, &problem.items);
-            blacklist_for_less_allocations
-                .iter_mut()
-                .for_each(|x| *x = false);
+            let (cost, weight) = cost_weight(&state, &items);
+
             let blacklist = tabu.blacklist(&state, &mut blacklist_for_less_allocations);
+            //println!("{:?}", blacklist);
             // maximize function (- over_capacity, cost, _)
-            let cost_fn = izip!((0..), state.iter(), problem.items.iter(), blacklist.iter())
+            let cost_fn = izip!((0..), state.iter(), items.iter(), blacklist.iter())
                 .filter(|(_, _, _, &blacklist)| !blacklist)
                 .map(|(i, &current_state, item, _)| {
                     let (new_weight, new_cost) = if current_state {
@@ -113,34 +114,49 @@ impl SolverTrait for TabuSearchSolver {
                         (weight + item.weight, cost + item.cost)
                     };
                     if new_weight > problem.max_weight {
-                        (std::u32::MAX - new_weight, new_cost, i)
+                        (std::u32::MAX - new_weight + problem.max_weight, new_cost, i)
                     } else {
                         (std::u32::MAX, new_cost, i)
                     }
                 })
-                .max();
-
-            let index_to_switch = cost_fn.map(|(_, _, i)| i);
-
+                .max().unwrap_or_else(||{
+                    // tries again without blacklist
+                    izip!((0..), state.iter(), items.iter())
+                    .map(|(i, &current_state, item)| {
+                        let (new_weight, new_cost) = if current_state {
+                            (weight - item.weight, cost - item.cost)
+                        } else {
+                            (weight + item.weight, cost + item.cost)
+                        };
+                        if new_weight > problem.max_weight {
+                            (std::u32::MAX - new_weight + problem.max_weight, new_cost, i)
+                        } else {
+                            (std::u32::MAX, new_cost, i)
+                        }
+                    })
+                    .max().unwrap()
+                });
             tabu.insert(&state);
-            //switch state
-            if let Some(i) = index_to_switch {
-                state[i] = !state[i];
-            } else {
-                panic!("Tabu stuck in local minimum (all near states are in tabu).");
+            let index_to_switch = cost_fn.2;
+            state[index_to_switch] = !state[index_to_switch];
+
+            if cost_fn.0 == std::u32::MAX && best_cost < cost_fn.1 {
+                best_solution.iter_mut().zip(state.iter()).for_each(|(b, &s)| *b = s);
+                best_cost = cost_fn.1;
             }
+            //switch state
         }
-        let (cost, weight) = cost_weight(&state, &problem.items);
-        if weight > problem.max_weight {
-            Solution::empty(problem.id, problem.size)
+        println!("{:?}", best_solution);
+        if problem.max_weight < items.iter().zip(best_solution.iter()).map(|(item, &included)| if included {item.weight} else {0}).sum(){
+            Solution::none(problem.id, problem.size)
         } else {
             Solution {
                 id: problem.id,
-                cost,
-                items: Some(state.into_iter().enumerate().fold(
+                cost: best_cost,
+                items: Some(best_solution.into_iter().enumerate().fold(
                     vec![false; problem.size],
                     |mut acc, (i, x)| {
-                        if let Some(&mapping) = mappings.get(i) {
+                        if let Some(&mapping) = mapping.get(i) {
                             acc[mapping] = x;
                         }
                         acc

@@ -84,9 +84,10 @@ fn main() -> Result<(), Error> {
 
     if !solver.is_exact() && ref_solutions.is_some() {
         println!(
-            "Maximum error: {} Average error: {}",
+            "Maximum error: {} Average error: {} No solution: {}",
             stats.relative_error_max,
-            stats.relative_error_total / stats.instances as f64
+            stats.relative_error_total / stats.instances as f64,
+            stats.no_solution,
         );
     }
 
@@ -99,6 +100,7 @@ struct Stats {
     instances: usize,
     relative_error_total: f64,
     relative_error_max: f64,
+    no_solution: usize,
 }
 
 fn check_solution(
@@ -110,7 +112,10 @@ fn check_solution(
     stats: &mut Stats,
 ) -> String {
     stats.instances += 1;
-    if solver.is_exact() {
+    if !solution.items.is_some(){
+        stats.no_solution += 1;
+        " No solution found".to_string()
+    } else if solver.is_exact() {
         if *reference != *solution
             && reference.cost == solution.cost
             && reference.size == solution.size
@@ -124,7 +129,7 @@ fn check_solution(
         let absolute_error = reference.cost - solution.cost;
         let ref_cost = reference.cost as f64;
         let cost = solution.cost as f64;
-        let relative_error = (ref_cost - cost) / ref_cost;
+        let relative_error = (ref_cost - cost) / ref_cost.max(1.0);
 
         stats.relative_error_max = stats.relative_error_max.max(relative_error);
         stats.relative_error_total += relative_error;
