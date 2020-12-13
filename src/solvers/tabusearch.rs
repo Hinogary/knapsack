@@ -99,6 +99,10 @@ impl SolverTrait for TabuSearchSolver {
 
         let mut blacklist_for_less_allocations = vec![false; items.len()];
 
+        const RANDOM_CONST: u8 = 5;
+
+        //state.iter_mut().for_each(|s| *s = rand::random::<u8>() > RANDOM_CONST);
+
         for _ in 0..self.iterations {
             let (cost, weight) = cost_weight(&state, &items);
 
@@ -115,25 +119,17 @@ impl SolverTrait for TabuSearchSolver {
                     if new_weight > problem.max_weight {
                         (ratio::new(new_cost, new_weight), new_cost, new_weight, i)
                     } else {
-                        (ratio::new(std::u32::MAX, 1), new_cost, new_weight, i)
+                        (ratio::new(3*new_cost, 2*new_weight.max(1)), new_cost, new_weight, i)
                     }
                 })
                 .max().unwrap_or_else(||{
-                    // tries again without blacklist
-                    izip!((0..), state.iter(), items.iter())
-                    .map(|(i, &current_state, item)| {
-                        let (new_weight, new_cost) = if current_state {
-                            ((weight - item.weight), cost - item.cost)
-                        } else {
-                            (weight + item.weight, cost + item.cost)
-                        };
-                        if new_weight > problem.max_weight {
-                            (ratio::new(new_cost, new_weight), new_cost, new_weight, i)
-                        } else {
-                            (ratio::new(std::u32::MAX, 1), new_cost, new_weight, i)
-                        }
-                    })
-                    .max().unwrap()
+                    // reset
+                    let random = rand::random::<usize>() % items.len();
+                    state.iter_mut().for_each(|s| *s = rand::random::<u8>() > RANDOM_CONST);
+                    state[random] = true;
+                    let (cost, weight) = cost_weight(&state, &items);
+                    state[random] = false;
+                    (ratio::new(0,1), cost, weight, random)
                 });
             tabu.insert(&state);
             let index_to_switch = max_cost_fn.3;
@@ -145,7 +141,6 @@ impl SolverTrait for TabuSearchSolver {
             }
             //switch state
         }
-        println!("{:?}", best_solution);
         if problem.max_weight < items.iter().zip(best_solution.iter()).map(|(item, &included)| if included {item.weight} else {0}).sum(){
             Solution::none(problem.id, problem.size)
         } else {

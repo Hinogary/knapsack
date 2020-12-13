@@ -13,6 +13,7 @@ num-rational = "0.3"
 derive_more = "0.99"
 enum_dispatch = "0.3"
 arrayvec = "0.5"
+rand = "0.7"
 
 [profile.release]
 lto="thin"
